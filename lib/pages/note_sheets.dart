@@ -1,6 +1,7 @@
 import "package:flutter/cupertino.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
+import "../models/audience.dart";
 import "../models/feed_models.dart";
 import "../models/social_models.dart";
 import "../providers/chat_provider.dart";
@@ -8,6 +9,7 @@ import "../providers/notes_provider.dart";
 import "../providers/social_providers.dart";
 import "../services/music_service.dart";
 import "../theme/app_theme.dart";
+import "../widgets/audience_picker.dart";
 import "../widgets/dialogs.dart";
 import "../widgets/gradient_avatar.dart";
 import "../widgets/music_picker.dart";
@@ -99,6 +101,7 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
   bool _saving = false;
   Music? _music;
   String? _location;
+  Audience _audience = Audience.public;
   final PreviewPlayer _preview = PreviewPlayer();
 
   @override
@@ -107,6 +110,7 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
     final existing = ref.read(myNoteProvider);
     _music = existing?.music;
     _location = existing?.location;
+    _audience = existing?.audience ?? ref.read(lastAudienceProvider);
     // A song-only note stores the song as its text; start empty then.
     final body = existing?.body ?? "";
     _text = TextEditingController(text: body.startsWith("\u266B ") ? "" : body);
@@ -140,7 +144,12 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
     try {
       await ref
           .read(notesProvider.notifier)
-          .setNote(text, location: _location, music: _music);
+          .setNote(
+            text,
+            location: _location,
+            music: _music,
+            audience: _audience,
+          );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -278,9 +287,60 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
           ],
           const SizedBox(height: 10),
           Text(
-            "${_text.text.characters.length}/60 · Shared with followers you follow back for 24 hours",
+            "${_text.text.characters.length}/60 · Disappears after 24 hours",
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 12, color: colors.secondaryText),
+          ),
+          const SizedBox(height: 4),
+          // Who can see the note.
+          Semantics(
+            button: true,
+            label: "Shared with ${_audience.label}",
+            child: GestureDetector(
+              onTap: () async {
+                final picked = await showAudiencePicker(
+                  context,
+                  current: _audience,
+                  title: "Who can see your note?",
+                );
+                if (picked == null || !mounted) return;
+                setState(() => _audience = picked);
+                ref.read(lastAudienceProvider.notifier).set(picked);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: _audience == Audience.closeFriends
+                      ? kCloseFriendsGreen.withValues(alpha: 0.2)
+                      : colors.field,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(_audience.icon, size: 15, color: colors.text),
+                    const SizedBox(width: 6),
+                    Text(
+                      "Shared with ${_audience.label}",
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colors.text,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      CupertinoIcons.chevron_down,
+                      size: 12,
+                      color: colors.text,
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
           if (existing != null) ...[
             const SizedBox(height: 12),

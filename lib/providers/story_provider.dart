@@ -2,6 +2,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:image_picker/image_picker.dart";
 
 import "../data/sample_feed.dart";
+import "../models/audience.dart";
 import "../models/social_models.dart";
 import "social_providers.dart";
 
@@ -84,6 +85,7 @@ class StoriesNotifier extends AsyncNotifier<List<StoryGroup>> {
     required int durationMs,
     String? location,
     Music? music,
+    Audience audience = Audience.public,
   }) async {
     await ref
         .read(repositoryProvider)
@@ -94,7 +96,13 @@ class StoriesNotifier extends AsyncNotifier<List<StoryGroup>> {
           durationMs: durationMs,
           location: location,
           music: music,
+          audience: audience,
         );
+    await refresh();
+  }
+
+  Future<void> setAudience(String storyId, Audience audience) async {
+    await ref.read(repositoryProvider).setStoryAudience(storyId, audience);
     await refresh();
   }
 

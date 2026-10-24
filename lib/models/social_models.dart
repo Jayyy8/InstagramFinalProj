@@ -1,6 +1,8 @@
 /// Data that lives in Supabase: profiles, stories, notes and messages.
 library;
 
+import "audience.dart";
+
 DateTime _date(Object? value) =>
     DateTime.tryParse(value?.toString() ?? "")?.toLocal() ?? DateTime.now();
 
@@ -159,6 +161,7 @@ class StorySlide {
   final DateTime createdAt;
   final String? location;
   final Music? music;
+  final Audience audience;
 
   /// True when the slide is stored in Supabase (it can be viewed, liked,
   /// replied to and deleted for real).
@@ -174,6 +177,7 @@ class StorySlide {
     this.remote = false,
     this.location,
     this.music,
+    this.audience = Audience.public,
   });
 
   bool get isVideo => videoUrl != null;
@@ -198,6 +202,7 @@ class StorySlide {
       remote: true,
       location: map["location"] as String?,
       music: Music.fromJson(map["music"]),
+      audience: Audience.fromKey(map["audience"]),
     );
   }
 }
@@ -224,6 +229,10 @@ class StoryGroup {
   });
 
   bool get remote => profile != null;
+
+  /// Has a story shared with Close Friends (green ring, like Instagram).
+  bool get closeFriends =>
+      slides.any((s) => s.audience == Audience.closeFriends);
 }
 
 /// A short status shown above the avatar in the inbox (Notes / My Day).
@@ -238,6 +247,7 @@ class Note {
   final int likeCount;
   final String? location;
   final Music? music;
+  final Audience audience;
 
   const Note({
     required this.id,
@@ -250,6 +260,7 @@ class Note {
     this.likeCount = 0,
     this.location,
     this.music,
+    this.audience = Audience.public,
   });
 
   bool get remote => profile != null;
@@ -266,6 +277,7 @@ class Note {
       likeCount: likeCount ?? this.likeCount,
       location: location,
       music: music,
+      audience: audience,
     );
   }
 }

@@ -1,3 +1,4 @@
+import "audience.dart";
 import "social_models.dart";
 
 enum FeedCategory { nba, football, news, docs }
@@ -154,6 +155,9 @@ class FeedPost {
   /// The post is one video ([imageUrls] holds its URL).
   final bool isVideo;
 
+  /// Who can see the post.
+  final Audience audience;
+
   /// Sample posts that only appear on the channel's profile grid.
   final bool showInFeed;
 
@@ -174,6 +178,7 @@ class FeedPost {
     this.comments = const [],
     this.commentCount = 0,
     this.isVideo = false,
+    this.audience = Audience.public,
     this.showInFeed = true,
   });
 
@@ -197,6 +202,7 @@ class FeedPost {
   List<String> get cover => photos.isEmpty ? const [] : photos.first;
 
   FeedPost copyWith({
+    Audience? audience,
     bool? liked,
     bool? saved,
     int? baseLikes,
@@ -220,6 +226,7 @@ class FeedPost {
       comments: comments ?? this.comments,
       commentCount: commentCount ?? this.commentCount,
       isVideo: isVideo,
+      audience: audience ?? this.audience,
       showInFeed: showInFeed,
     );
   }

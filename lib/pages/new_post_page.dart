@@ -5,8 +5,11 @@ import "package:flutter/cupertino.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:image_picker/image_picker.dart";
 
+import "../models/audience.dart";
 import "../providers/feed_provider.dart";
+import "../providers/social_providers.dart";
 import "../theme/app_theme.dart";
+import "../widgets/audience_picker.dart";
 import "../widgets/dialogs.dart";
 import "../widgets/post_video.dart";
 import "../widgets/sub_page.dart";
@@ -28,6 +31,9 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
 
   /// A video post (instead of photos). Videos also show in Reels.
   XFile? _video;
+
+  /// Who can see the post (starts at the audience you used last).
+  late Audience _audience = ref.read(lastAudienceProvider);
   int _selected = 0;
   bool _sharing = false;
 
@@ -133,6 +139,7 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
             caption: _caption.text,
             location: _location.text,
             video: _video,
+            audience: _audience,
           );
       if (!mounted) return;
       showToast(context, "Your post has been shared");
@@ -310,6 +317,14 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
                       ),
                     ],
                   ),
+                ),
+                Container(height: 0.5, color: colors.separator),
+                AudienceRow(
+                  audience: _audience,
+                  onChanged: (a) {
+                    setState(() => _audience = a);
+                    ref.read(lastAudienceProvider.notifier).set(a);
+                  },
                 ),
                 Container(height: 0.5, color: colors.separator),
                 const SizedBox(height: 20),

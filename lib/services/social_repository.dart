@@ -3,6 +3,7 @@ import "dart:typed_data";
 import "package:image_picker/image_picker.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
+import "../models/audience.dart";
 import "../models/feed_models.dart";
 import "../models/social_models.dart";
 
@@ -297,6 +298,7 @@ class SocialRepository {
               saved: saved.contains(id),
               commentCount: commentCount[id] ?? 0,
               isVideo: r["media_type"] == "video",
+              audience: Audience.fromKey(r["audience"]),
             );
           }(),
     ];
@@ -374,6 +376,7 @@ class SocialRepository {
     required String caption,
     required String location,
     XFile? video,
+    Audience audience = Audience.public,
   }) async {
     final urls = <String>[];
     if (video != null) {
@@ -392,6 +395,8 @@ class SocialRepository {
           "image_url": urls.first,
           "image_urls": urls,
           if (video != null) "media_type": "video",
+          // Only sent when not public, so older databases keep working.
+          if (audience != Audience.public) "audience": audience.key,
         })
         .select(_postColumns)
         .single();
@@ -465,6 +470,39 @@ class SocialRepository {
     await _db.from("comments").delete().eq("id", id);
   }
 
+  Future<void> setPostAudience(String postId, Audience audience) async {
+    await _db
+        .from("posts")
+        .update({"audience": audience.key})
+        .eq("id", postId)
+        .eq("user_id", me);
+  }
+
+  // ─────────────────────────── Close Friends ───────────────────────────
+
+  Future<Set<String>> closeFriendIds() async {
+    final rows = await _db
+        .from("close_friends")
+        .select("friend_id")
+        .eq("owner_id", me);
+    return {for (final r in rows) r["friend_id"] as String};
+  }
+
+  Future<void> setCloseFriend(String userId, bool add) async {
+    if (add) {
+      await _db.from("close_friends").upsert({
+        "owner_id": me,
+        "friend_id": userId,
+      }, ignoreDuplicates: true);
+    } else {
+      await _db
+          .from("close_friends")
+          .delete()
+          .eq("owner_id", me)
+          .eq("friend_id", userId);
+    }
+  }
+
   // ─────────────────────────── Stories ───────────────────────────
 
   /// Active stories of [userIds], grouped per account in the order given.
@@ -529,6 +567,7 @@ class SocialRepository {
     required int durationMs,
     String? location,
     Music? music,
+    Audience audience = Audience.public,
   }) async {
     final url = await upload("stories", file);
     await _db.from("stories").insert({
@@ -539,7 +578,16 @@ class SocialRepository {
       "duration_ms": durationMs,
       "location": ?location,
       "music": ?music?.toJson(),
+      if (audience != Audience.public) "audience": audience.key,
     });
+  }
+
+  Future<void> setStoryAudience(String storyId, Audience audience) async {
+    await _db
+        .from("stories")
+        .update({"audience": audience.key})
+        .eq("id", storyId)
+        .eq("user_id", me);
   }
 
   Future<void> deleteStory(String id) async {
@@ -641,13 +689,19 @@ class SocialRepository {
               likeCount: mine.length,
               location: r["location"] as String?,
               music: Music.fromJson(r["music"]),
+              audience: Audience.fromKey(r["audience"]),
             );
           }(),
     ];
   }
 
   /// Replaces your note (likes on the old one are removed with it).
-  Future<void> setNote(String text, {String? location, Music? music}) async {
+  Future<void> setNote(
+    String text, {
+    String? location,
+    Music? music,
+    Audience audience = Audience.public,
+  }) async {
     // A note with only a song shows the song as its text.
     var content = text.trim();
     if (content.isEmpty && music != null) content = "♫ ${music.label}";
@@ -658,6 +712,7 @@ class SocialRepository {
       "content": content,
       "location": ?location,
       "music": ?music?.toJson(),
+      if (audience != Audience.public) "audience": audience.key,
       "expires_at": DateTime.now()
           .add(const Duration(hours: 24))
           .toUtc()

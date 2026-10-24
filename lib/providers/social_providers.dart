@@ -3,6 +3,7 @@ import "dart:async";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:image_picker/image_picker.dart";
 
+import "../models/audience.dart";
 import "../models/social_models.dart";
 import "../services/social_repository.dart";
 import "supabase_providers.dart";
@@ -175,3 +176,49 @@ final unseenActivityProvider = Provider<int>((ref) {
   if (seen == null) return items.length;
   return items.where((a) => a.createdAt.isAfter(seen)).length;
 });
+
+/// Your Close Friends list (ids). Changes save right away.
+class CloseFriendsNotifier extends AsyncNotifier<Set<String>> {
+  @override
+  Future<Set<String>> build() async {
+    if (ref.watch(currentUserIdProvider) == null) return {};
+    return ref.read(repositoryProvider).closeFriendIds();
+  }
+
+  Future<void> toggle(String userId) async {
+    final current = {...?state.valueOrNull};
+    final add = !current.contains(userId);
+    if (add) {
+      current.add(userId);
+    } else {
+      current.remove(userId);
+    }
+    state = AsyncData(current);
+    try {
+      await ref.read(repositoryProvider).setCloseFriend(userId, add);
+    } catch (_) {
+      ref.invalidateSelf();
+      rethrow;
+    }
+  }
+}
+
+final closeFriendsProvider =
+    AsyncNotifierProvider<CloseFriendsNotifier, Set<String>>(
+      CloseFriendsNotifier.new,
+    );
+
+/// The audience you picked last, offered first next time.
+class LastAudienceNotifier extends Notifier<Audience> {
+  @override
+  Audience build() {
+    ref.watch(currentUserIdProvider);
+    return Audience.public;
+  }
+
+  void set(Audience audience) => state = audience;
+}
+
+final lastAudienceProvider = NotifierProvider<LastAudienceNotifier, Audience>(
+  LastAudienceNotifier.new,
+);

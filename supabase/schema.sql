@@ -494,3 +494,111 @@ begin
 end;
 $$;
 alter table public.message_reactions replica identity full;
+
+-- ════════════════════ Update 3: who can see it ════════════════════
+-- Each post, story and note has an audience:
+--   public, followers, friends (you follow each other),
+--   friends_of_friends, close_friends, only_me.
+-- The database enforces it: people outside the audience never receive it.
+
+alter table public.posts   add column if not exists audience text not null default 'public';
+alter table public.stories add column if not exists audience text not null default 'public';
+alter table public.notes   add column if not exists audience text not null default 'public';
+
+-- Your Close Friends list.
+create table if not exists public.close_friends (
+  owner_id   uuid not null references public.profiles (id) on delete cascade,
+  friend_id  uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (owner_id, friend_id),
+  constraint no_self_close_friend check (owner_id <> friend_id)
+);
+alter table public.close_friends enable row level security;
+
+drop policy if exists "close friends own" on public.close_friends;
+create policy "close friends own" on public.close_friends
+  for all to authenticated
+  using (owner_id = auth.uid())
+  with check (owner_id = auth.uid());
+
+-- True when the signed-in user may see something [owner] shared with
+-- [audience]. security definer: it reads follows / close_friends directly.
+create or replace function public.can_view(owner uuid, audience text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case
+    when auth.uid() is null then false
+    when owner = auth.uid() then true
+    when audience = 'public' or audience is null then true
+    when audience = 'only_me' then false
+    when audience = 'followers' then exists (
+      select 1 from follows f
+      where f.follower_id = auth.uid() and f.following_id = owner)
+    when audience = 'close_friends' then exists (
+      select 1 from close_friends c
+      where c.owner_id = owner and c.friend_id = auth.uid())
+    when audience = 'friends' then exists (
+      select 1 from follows a
+      join follows b on b.follower_id = a.following_id and b.following_id = a.follower_id
+      where a.follower_id = owner and a.following_id = auth.uid())
+    when audience = 'friends_of_friends' then exists (
+      -- a friend of the owner...
+      select 1 from follows a
+      join follows b on b.follower_id = a.following_id and b.following_id = a.follower_id
+      where a.follower_id = owner
+        and (
+          a.following_id = auth.uid()
+          -- ...who is also a friend of the viewer.
+          or exists (
+            select 1 from follows c
+            join follows d on d.follower_id = c.following_id and d.following_id = c.follower_id
+            where c.follower_id = a.following_id and c.following_id = auth.uid())
+        ))
+    else false
+  end;
+$$;
+
+-- Replace every read rule on posts, stories and notes (including ones that
+-- existed before this script), so nothing can bypass the audience.
+do $$
+declare
+  p record;
+begin
+  for p in
+    select policyname, tablename from pg_policies
+    where schemaname = 'public'
+      and tablename in ('posts', 'stories', 'notes')
+      and cmd in ('SELECT', 'ALL')
+  loop
+    execute format('drop policy if exists %I on public.%I', p.policyname, p.tablename);
+  end loop;
+end;
+$$;
+
+create policy "posts read by audience" on public.posts
+  for select to authenticated using (public.can_view(user_id, audience));
+
+create policy "stories read by audience" on public.stories
+  for select to authenticated using (
+    user_id = auth.uid()
+    or (expires_at > now() and public.can_view(user_id, audience))
+  );
+
+create policy "notes read by audience" on public.notes
+  for select to authenticated using (public.can_view(user_id, audience));
+
+-- Notes: you still write only your own (this rule was replaced above).
+drop policy if exists "notes write own" on public.notes;
+create policy "notes write own" on public.notes
+  for all to authenticated
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+-- Changing the audience of your own story.
+drop policy if exists "stories update own" on public.stories;
+create policy "stories update own" on public.stories
+  for update to authenticated using (user_id = auth.uid());

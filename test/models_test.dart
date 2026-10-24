@@ -1,5 +1,6 @@
 import "package:flutter_test/flutter_test.dart";
 import "package:oauth_activity/data/sample_feed.dart";
+import "package:oauth_activity/models/audience.dart";
 import "package:oauth_activity/models/feed_models.dart";
 import "package:oauth_activity/models/social_models.dart";
 import "package:oauth_activity/providers/story_provider.dart";
@@ -279,6 +280,43 @@ void main() {
       final first = groups.first;
       expect(groupSeen(first, {}), false);
       expect(groupSeen(first, {for (final s in first.slides) s.id}), true);
+    });
+  });
+
+  group("Audience", () {
+    test("database keys round-trip and unknown values are public", () {
+      for (final a in Audience.values) {
+        expect(Audience.fromKey(a.key), a);
+      }
+      expect(Audience.fromKey(null), Audience.public);
+      expect(Audience.fromKey("something_else"), Audience.public);
+      expect(Audience.friendsOfFriends.key, "friends_of_friends");
+      expect(Audience.onlyMe.key, "only_me");
+    });
+
+    test("posts, stories and notes read their audience", () {
+      final slide = StorySlide.fromMap({
+        "id": "s",
+        "media_url": "https://x/p.jpg",
+        "created_at": "2026-10-24T10:00:00Z",
+        "audience": "close_friends",
+      });
+      expect(slide.audience, Audience.closeFriends);
+      final group = StoryGroup(key: "u", username: "u", slides: [slide]);
+      expect(group.closeFriends, true);
+
+      const post = FeedPost(
+        id: "p",
+        imageUrls: ["a"],
+        caption: "",
+        location: "",
+        baseLikes: 0,
+      );
+      expect(post.audience, Audience.public);
+      expect(
+        post.copyWith(audience: Audience.onlyMe).audience,
+        Audience.onlyMe,
+      );
     });
   });
 }

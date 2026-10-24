@@ -5,12 +5,14 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:image_picker/image_picker.dart";
 import "package:video_player/video_player.dart";
 
+import "../models/audience.dart";
 import "../models/social_models.dart";
 import "../providers/social_providers.dart";
 import "../providers/story_provider.dart";
 import "../services/music_service.dart";
 import "../services/social_repository.dart";
 import "../theme/app_theme.dart";
+import "../widgets/audience_picker.dart";
 import "../widgets/dialogs.dart";
 import "../widgets/gradient_avatar.dart";
 import "../widgets/music_picker.dart";
@@ -316,7 +318,24 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
     setState(() => _location = place.isEmpty ? null : place);
   }
 
-  Future<void> _share() async {
+  /// Who "Your story" is shared with (starts at the audience used last).
+  late Audience _audience =
+      ref.read(lastAudienceProvider) == Audience.closeFriends
+      ? Audience.public
+      : ref.read(lastAudienceProvider);
+
+  Future<void> _pickAudience() async {
+    final picked = await showAudiencePicker(
+      context,
+      current: _audience,
+      title: "Who can see your story?",
+    );
+    if (picked == null || !mounted) return;
+    setState(() => _audience = picked);
+    ref.read(lastAudienceProvider.notifier).set(picked);
+  }
+
+  Future<void> _share(Audience audience) async {
     if (_uploading) return;
     setState(() => _uploading = true);
     _video?.pause();
@@ -336,9 +355,15 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
             durationMs: duration,
             location: _location,
             music: _music,
+            audience: audience,
           );
       if (!mounted) return;
-      showToast(context, "Your story was shared");
+      showToast(
+        context,
+        audience == Audience.closeFriends
+            ? "Shared with Close Friends"
+            : "Your story was shared",
+      );
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (!mounted) return;
@@ -478,60 +503,159 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
               ),
             ),
 
-          // ───── Bottom: share ─────
+          // ───── Bottom: who sees it, then share ─────
           if (_editing == null)
             Positioned(
               left: 12,
               right: 12,
               bottom: padding.bottom + 12,
-              child: Row(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Expanded(
+                  Semantics(
+                    button: true,
+                    label: "Your story audience: ${_audience.label}",
                     child: GestureDetector(
-                      onTap: _share,
+                      onTap: _pickAudience,
                       child: Container(
-                        height: 48,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF262626),
-                          borderRadius: BorderRadius.circular(24),
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0x99000000),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
                         child: Row(
+                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            GradientAvatar(
-                              name: me?.username ?? "",
-                              imageUrls: me?.avatarUrls,
-                              size: 32,
-                              ring: false,
+                            Icon(
+                              _audience.icon,
+                              size: 15,
+                              color: const Color(0xFFFFFFFF),
                             ),
-                            const SizedBox(width: 10),
-                            const Text(
-                              "Your story",
-                              style: TextStyle(
+                            const SizedBox(width: 6),
+                            Text(
+                              "Your story: ${_audience.label}",
+                              style: const TextStyle(
                                 color: Color(0xFFFFFFFF),
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
                               ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              CupertinoIcons.chevron_down,
+                              size: 12,
+                              color: Color(0xFFFFFFFF),
                             ),
                           ],
                         ),
                       ),
                     ),
                   ),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    onTap: _share,
-                    child: Container(
-                      width: 48,
-                      height: 48,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFFFFFFFF),
-                        shape: BoxShape.circle,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          label: "Share to your story",
+                          child: GestureDetector(
+                            onTap: () => _share(_audience),
+                            child: Container(
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF262626),
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  GradientAvatar(
+                                    name: me?.username ?? "",
+                                    imageUrls: me?.avatarUrls,
+                                    size: 32,
+                                    ring: false,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  const Flexible(
+                                    child: Text(
+                                      "Your story",
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Color(0xFFFFFFFF),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                      child: const Icon(
-                        CupertinoIcons.arrow_right,
-                        color: Color(0xFF000000),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Semantics(
+                          button: true,
+                          label: "Share to Close Friends",
+                          child: GestureDetector(
+                            onTap: () => _share(Audience.closeFriends),
+                            child: Container(
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF262626),
+                                borderRadius: BorderRadius.circular(24),
+                              ),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                              child: const Row(
+                                children: [
+                                  CircleAvatarStar(),
+                                  SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      "Close Friends",
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: Color(0xFFFFFFFF),
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Semantics(
+                        button: true,
+                        label: "Share",
+                        child: GestureDetector(
+                          onTap: () => _share(_audience),
+                          child: Container(
+                            width: 48,
+                            height: 48,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFFFFFF),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.arrow_right,
+                              color: Color(0xFF000000),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -685,6 +809,28 @@ class _RoundTool extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+      ),
+    );
+  }
+}
+
+/// Green circle with a star (Close Friends button).
+class CircleAvatarStar extends StatelessWidget {
+  const CircleAvatarStar({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 32,
+      height: 32,
+      decoration: const BoxDecoration(
+        color: kCloseFriendsGreen,
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(
+        CupertinoIcons.star_fill,
+        size: 16,
+        color: Color(0xFFFFFFFF),
       ),
     );
   }

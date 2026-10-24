@@ -1,6 +1,7 @@
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
 import "../data/sample_feed.dart";
+import "../models/audience.dart";
 import "../models/social_models.dart";
 import "social_providers.dart";
 
@@ -45,10 +46,15 @@ class NotesNotifier extends AsyncNotifier<NotesState> {
     return NotesState(mine: mine, others: [...others, ..._sampleNotes()]);
   }
 
-  Future<void> setNote(String text, {String? location, Music? music}) async {
+  Future<void> setNote(
+    String text, {
+    String? location,
+    Music? music,
+    Audience audience = Audience.public,
+  }) async {
     await ref
         .read(repositoryProvider)
-        .setNote(text, location: location, music: music);
+        .setNote(text, location: location, music: music, audience: audience);
     ref.invalidateSelf();
     await future;
   }

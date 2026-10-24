@@ -11,6 +11,7 @@ import "../widgets/logout_dialog.dart";
 import "../widgets/sub_page.dart";
 import "account_center_page.dart";
 import "change_password_page.dart";
+import "close_friends_page.dart";
 import "developer_info_page.dart";
 import "discover_people_page.dart";
 import "post_list_pages.dart";
@@ -114,6 +115,13 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       (
         "Who can see your content",
         [
+          _Row(
+            CupertinoIcons.star_circle,
+            "Close Friends",
+            value:
+                "${ref.watch(closeFriendsProvider).valueOrNull?.length ?? 0}",
+            onTap: () => push(context, const CloseFriendsPage()),
+          ),
           _Row(
             CupertinoIcons.lock_shield,
             "Private account",

@@ -4,6 +4,7 @@ import "package:flutter/cupertino.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:video_player/video_player.dart";
 
+import "../models/audience.dart";
 import "../models/feed_models.dart";
 import "../models/social_models.dart";
 import "../navigation.dart";
@@ -12,6 +13,7 @@ import "../providers/social_providers.dart";
 import "../providers/story_provider.dart";
 import "../services/music_service.dart";
 import "../theme/app_theme.dart";
+import "../widgets/audience_picker.dart";
 import "../widgets/dialogs.dart";
 import "../widgets/feed_image.dart";
 import "../widgets/gradient_avatar.dart";
@@ -377,6 +379,33 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
               },
             ),
           ),
+        if (mine && _slide.remote)
+          SheetAction(
+            label: "Change audience · ${_slide.audience.label}",
+            icon: _slide.audience.icon,
+            onTap: () async {
+              _holding = true;
+              _syncPlayback();
+              final picked = await showAudiencePicker(
+                context,
+                current: _slide.audience,
+                title: "Who can see this story?",
+              );
+              _holding = false;
+              _syncPlayback();
+              if (picked == null || picked == _slide.audience) return;
+              try {
+                await ref
+                    .read(storiesProvider.notifier)
+                    .setAudience(_slide.id, picked);
+                if (mounted) {
+                  showToast(context, "Now shared with ${picked.label}");
+                }
+              } catch (e) {
+                if (mounted) showToast(context, errorText(e), error: true);
+              }
+            },
+          ),
         if (mine)
           SheetAction(
             label: "Add to your story",
@@ -594,7 +623,10 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
                                         Flexible(
                                           child: Text(
                                             group.isMine
-                                                ? "Your story"
+                                                ? (slide.audience ==
+                                                          Audience.public
+                                                      ? "Your story"
+                                                      : "Your story · ${slide.audience.label}")
                                                 : group.username,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,

@@ -13,6 +13,9 @@ class GradientAvatar extends StatelessWidget {
   final bool showPlus;
   final VoidCallback? onPlus;
 
+  /// Green Close Friends ring instead of the gradient.
+  final bool closeFriends;
+
   const GradientAvatar({
     super.key,
     required this.name,
@@ -22,6 +25,7 @@ class GradientAvatar extends StatelessWidget {
     this.seen = false,
     this.showPlus = false,
     this.onPlus,
+    this.closeFriends = false,
   });
 
   @override
@@ -58,8 +62,10 @@ class GradientAvatar extends StatelessWidget {
       padding: EdgeInsets.all(ring ? (seen ? 1 : ringWidth) : 0),
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: ring && seen ? colors.separator : null,
-        gradient: ring && !seen
+        color: ring && seen
+            ? colors.separator
+            : (ring && closeFriends ? kCloseFriendsGreen : null),
+        gradient: ring && !seen && !closeFriends
             ? const LinearGradient(
                 begin: Alignment.bottomLeft,
                 end: Alignment.topRight,

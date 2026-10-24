@@ -3,6 +3,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 
 import "../data/sample_feed.dart";
 
+import "../models/audience.dart";
 import "../models/feed_models.dart";
 import "../navigation.dart";
 import "../pages/channel_profile_page.dart";
@@ -340,9 +341,40 @@ class _PostCardState extends ConsumerState<PostCard> {
                 ),
               ],
               const SizedBox(height: 4),
-              Text(
-                post.timeAgo,
-                style: TextStyle(fontSize: 12, color: colors.secondaryText),
+              Row(
+                children: [
+                  Text(
+                    post.timeAgo,
+                    style: TextStyle(fontSize: 12, color: colors.secondaryText),
+                  ),
+                  // Only you see who your post is shared with.
+                  if (mine && post.audience != Audience.public) ...[
+                    Text(
+                      "  ·  ",
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                    Icon(
+                      post.audience == Audience.closeFriends
+                          ? CupertinoIcons.star_circle_fill
+                          : post.audience.icon,
+                      size: 13,
+                      color: post.audience == Audience.closeFriends
+                          ? kCloseFriendsGreen
+                          : colors.secondaryText,
+                    ),
+                    const SizedBox(width: 3),
+                    Text(
+                      post.audience.label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ],
           ),

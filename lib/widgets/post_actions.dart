@@ -11,6 +11,7 @@ import "../providers/chat_provider.dart";
 import "../providers/feed_provider.dart";
 import "../providers/social_providers.dart";
 import "../theme/app_theme.dart";
+import "audience_picker.dart";
 import "dialogs.dart";
 import "gradient_avatar.dart";
 
@@ -298,6 +299,29 @@ void showPostMenu(BuildContext context, WidgetRef ref, FeedPost post) {
           label: "Not interested",
           icon: CupertinoIcons.eye_slash,
           onTap: () => actions.hide(post),
+        ),
+      if (mine)
+        SheetAction(
+          label: "Edit audience · ${post.audience.label}",
+          icon: post.audience.icon,
+          onTap: () async {
+            final picked = await showAudiencePicker(
+              context,
+              current: post.audience,
+              title: "Who can see this post?",
+            );
+            if (picked == null || picked == post.audience) return;
+            try {
+              await actions.setAudience(post, picked);
+              if (context.mounted) {
+                showToast(context, "Now shared with ${picked.label}");
+              }
+            } catch (e) {
+              if (context.mounted) {
+                showToast(context, errorText(e), error: true);
+              }
+            }
+          },
         ),
       if (mine)
         SheetAction(

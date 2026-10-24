@@ -2,6 +2,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:image_picker/image_picker.dart";
 
 import "../data/sample_feed.dart";
+import "../models/audience.dart";
 import "../models/feed_models.dart";
 import "../services/social_repository.dart";
 import "social_providers.dart";
@@ -260,6 +261,18 @@ class PostActions {
     );
   }
 
+  /// Changes who can see one of your posts.
+  Future<void> setAudience(FeedPost post, Audience audience) async {
+    final before = post.audience;
+    _change(post, (p) => p.copyWith(audience: audience));
+    try {
+      await _repo.setPostAudience(post.id, audience);
+    } catch (_) {
+      _change(post, (p) => p.copyWith(audience: before));
+      rethrow;
+    }
+  }
+
   void hide(FeedPost post) {
     if (post.remote) {
       _ref.read(homeFeedProvider.notifier).removeId(post.id);
@@ -281,12 +294,14 @@ class PostActions {
     required String caption,
     required String location,
     XFile? video,
+    Audience audience = Audience.public,
   }) async {
     final post = await _repo.createPost(
       photos: photos,
       caption: caption,
       location: location,
       video: video,
+      audience: audience,
     );
     _ref.read(homeFeedProvider.notifier).prepend(post);
     _ref.invalidate(userPostIdsProvider(post.author!.id));

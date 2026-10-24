@@ -48,6 +48,7 @@ class StoriesRow extends ConsumerWidget {
                 size: 80,
                 ring: mine != null,
                 seen: mine != null && groupSeen(mine, seen),
+                closeFriends: mine?.closeFriends ?? false,
                 showPlus: true,
                 onPlus: addStory,
               ),
@@ -64,6 +65,7 @@ class StoriesRow extends ConsumerWidget {
               size: 80,
               imageUrls: group.avatarUrls,
               seen: groupSeen(group, seen),
+              closeFriends: group.closeFriends,
             ),
           );
         },
