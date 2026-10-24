@@ -3,6 +3,7 @@ import "package:image_picker/image_picker.dart";
 
 import "../data/sample_feed.dart";
 import "../models/audience.dart";
+import "../models/feed_models.dart";
 import "../models/social_models.dart";
 import "social_providers.dart";
 
@@ -35,6 +36,12 @@ final seenStoriesProvider = NotifierProvider<SeenStoriesNotifier, Set<String>>(
 /// Sample channel stories, as story groups.
 List<StoryGroup> sampleStoryGroups() {
   final start = DateTime.now().subtract(const Duration(hours: 3));
+  Music? songOf(StoryTopic topic) {
+    final s = topic.song;
+    if (s == null) return null;
+    return Music(title: s[0], artist: s[1], previewUrl: s[2], artworkUrl: s[3]);
+  }
+
   return [
     for (final topic in kStoryTopics)
       StoryGroup(
@@ -48,6 +55,8 @@ List<StoryGroup> sampleStoryGroups() {
               id: "${topic.id}_$i",
               imageUrls: topic.photos[i],
               createdAt: start.add(Duration(minutes: 20 * i)),
+              music: songOf(topic),
+              durationMs: topic.song != null ? 10000 : 5000,
             ),
         ],
       ),

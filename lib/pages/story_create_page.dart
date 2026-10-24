@@ -230,7 +230,10 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
   void initState() {
     super.initState();
     if (widget.video) {
-      final controller = VideoPlayerController.file(File(widget.file.path));
+      final controller = VideoPlayerController.file(
+        File(widget.file.path),
+        videoPlayerOptions: kMixedAudio,
+      );
       _video = controller;
       controller.initialize().then((_) {
         if (!mounted) return;

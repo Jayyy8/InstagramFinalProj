@@ -43,6 +43,11 @@ class MusicService {
   }
 }
 
+/// Options for every player in the app. Without mixWithOthers each player
+/// takes the audio focus when it starts, and on Android the player that loses
+/// it pauses: a story's video (or a feed video) silenced the story's song.
+final VideoPlayerOptions kMixedAudio = VideoPlayerOptions(mixWithOthers: true);
+
 /// Plays one song preview at a time (stories, notes, the song picker).
 /// video_player plays audio-only URLs too, so no extra audio package.
 class PreviewPlayer {
@@ -59,7 +64,10 @@ class PreviewPlayer {
     }
     await stop();
     _url = url;
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(url),
+      videoPlayerOptions: kMixedAudio,
+    );
     _controller = controller;
     try {
       await controller.initialize();

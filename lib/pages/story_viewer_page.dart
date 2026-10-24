@@ -241,6 +241,7 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
     if (slide.isVideo) {
       final controller = VideoPlayerController.networkUrl(
         Uri.parse(slide.videoUrl!),
+        videoPlayerOptions: kMixedAudio,
       );
       _video = controller;
       setState(() {});
@@ -258,6 +259,8 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
                 : length)
           : Duration(milliseconds: slide.durationMs);
       await controller.seekTo(Duration.zero);
+      // A song replaces the video's own sound, as in the story editor.
+      if (slide.music != null) await controller.setVolume(0);
     } else {
       // Photo slides wait for the photo (see _photoReady), like Instagram:
       // a slow photo must not use up its time while still black.

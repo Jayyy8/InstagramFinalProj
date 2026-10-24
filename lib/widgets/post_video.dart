@@ -3,6 +3,7 @@ import "dart:io";
 import "package:flutter/cupertino.dart";
 import "package:video_player/video_player.dart";
 
+import "../services/music_service.dart";
 import "shimmer.dart";
 
 /// Video of a post. In the feed it plays when tapped; in Reels [autoplay]
@@ -30,8 +31,14 @@ class PostVideo extends StatefulWidget {
 class _PostVideoState extends State<PostVideo> {
   /// Web address, or a file on the phone (a video being posted).
   late final VideoPlayerController _controller = widget.url.startsWith("http")
-      ? VideoPlayerController.networkUrl(Uri.parse(widget.url))
-      : VideoPlayerController.file(File(widget.url));
+      ? VideoPlayerController.networkUrl(
+          Uri.parse(widget.url),
+          videoPlayerOptions: kMixedAudio,
+        )
+      : VideoPlayerController.file(
+          File(widget.url),
+          videoPlayerOptions: kMixedAudio,
+        );
   bool _ready = false;
   bool _failed = false;
   bool _muted = false;

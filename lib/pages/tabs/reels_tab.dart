@@ -9,6 +9,7 @@ import "../../data/sample_feed.dart";
 import "../../models/feed_models.dart";
 import "../../providers/feed_provider.dart";
 import "../../providers/social_providers.dart";
+import "../../services/music_service.dart";
 import "../../theme/app_theme.dart";
 import "../../widgets/dialogs.dart";
 import "../../widgets/feed_image.dart";
@@ -293,7 +294,10 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
     super.initState();
     if (!widget.post.isVideo) return;
     final url = widget.post.imageUrls.first;
-    final controller = VideoPlayerController.networkUrl(Uri.parse(url));
+    final controller = VideoPlayerController.networkUrl(
+      Uri.parse(url),
+      videoPlayerOptions: kMixedAudio,
+    );
     _video = controller;
     controller
         .initialize()

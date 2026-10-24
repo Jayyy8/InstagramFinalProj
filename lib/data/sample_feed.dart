@@ -52,6 +52,12 @@ final List<StoryTopic> kStoryTopics = [
     category: FeedCategory.nba,
     channel: _hoops,
     photos: kPhotoPool[FeedCategory.nba]!,
+    song: const [
+      "Blinding Lights",
+      "The Weeknd",
+      "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/19/d6/60/19d660ff-e3a9-8377-15a3-ce4b28e89cac/mzaf_18422426156481158187.plus.aac.p.m4a",
+      "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/300x300bb.jpg",
+    ],
   ),
   StoryTopic(
     id: "football",
@@ -73,6 +79,12 @@ final List<StoryTopic> kStoryTopics = [
     category: FeedCategory.docs,
     channel: _docs,
     photos: kPhotoPool[FeedCategory.docs]!,
+    song: const [
+      "Sunflower",
+      "Post Malone & Swae Lee",
+      "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/98/f0/d6/98f0d67e-f8bf-762d-cac7-1c6b3b6b35dd/mzaf_4543283896248560946.plus.aac.p.m4a",
+      "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/4b/30/2c/4b302cb6-7a14-5464-4e97-0577e9d0be49/18UMGIM82277.rgb.jpg/300x300bb.jpg",
+    ],
   ),
 ];
 

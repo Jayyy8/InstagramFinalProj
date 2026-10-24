@@ -241,12 +241,16 @@ class StoryTopic {
   /// One entry per story photo; each entry is a list of fallback URLs.
   final List<List<String>> photos;
 
+  /// Song played over the stories (title, artist, preview URL, artwork).
+  final List<String>? song;
+
   StoryTopic({
     required this.id,
     required this.label,
     required this.category,
     required this.channel,
     required this.photos,
+    this.song,
   });
 }
 
