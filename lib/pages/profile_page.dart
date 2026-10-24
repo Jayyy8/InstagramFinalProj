@@ -176,7 +176,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
               // top-right edge, its dots trailing down onto the avatar.
               SizedBox(
                 width: 96,
-                height: 124,
+                height: 146,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -212,8 +212,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     ),
                     if (note != null || isMe)
                       Positioned(
-                        left: 66,
-                        top: 4,
+                        left: 50,
+                        top: 0,
                         child: GestureDetector(
                           onTap: () {
                             if (isMe) {
@@ -225,7 +225,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                           child: NoteBubble(
                             text: note?.body ?? "Ask friends anything...",
                             placeholder: note == null,
-                            maxWidth: 100,
+                            maxWidth: 110,
                           ),
                         ),
                       ),

@@ -261,17 +261,44 @@ class _InstantsTab extends ConsumerWidget {
           if ((d.primaryVelocity ?? 0) < -150) open();
         },
         child: SizedBox(
-          // Only the left part of the card shows; the rest is off screen.
-          width: 50,
-          height: 124,
+          // Only the left part of the cards shows; the rest is off screen.
+          width: 58,
+          height: 150,
           child: Stack(
             clipBehavior: Clip.none,
             children: [
-              Positioned(left: 0, top: 0, child: card),
+              // A second card tilted the other way when there are more.
+              if (instants.length > 1)
+                Positioned(
+                  left: 14,
+                  top: 14,
+                  child: Transform.rotate(
+                    angle: 0.12,
+                    child: Opacity(
+                      opacity: 0.85,
+                      child: Container(
+                        width: 92,
+                        height: 124,
+                        decoration: ShapeDecoration(
+                          shape: shape,
+                          color: colors.dark
+                              ? const Color(0xFF363636)
+                              : const Color(0xFFD9D9DE),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              // The front card leans to the left, like Instagram's.
+              Positioned(
+                left: 8,
+                top: 12,
+                child: Transform.rotate(angle: -0.14, child: card),
+              ),
               if (latest != null)
                 Positioned(
-                  left: 2,
-                  top: 10,
+                  left: 4,
+                  top: 18,
                   child: Container(
                     width: 10,
                     height: 10,
