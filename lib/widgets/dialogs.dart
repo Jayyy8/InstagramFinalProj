@@ -183,7 +183,17 @@ class SheetFrame extends StatelessWidget {
           borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
         ),
         padding: EdgeInsets.only(bottom: media.padding.bottom),
-        child: DefaultTextStyle(style: baseTextStyle(context), child: content),
+        // The sheet sits below the status bar and already clears the home
+        // indicator: lists inside must not add those paddings again.
+        child: MediaQuery.removePadding(
+          context: context,
+          removeTop: true,
+          removeBottom: true,
+          child: DefaultTextStyle(
+            style: baseTextStyle(context),
+            child: content,
+          ),
+        ),
       ),
     );
   }

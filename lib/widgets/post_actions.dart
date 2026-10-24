@@ -61,8 +61,13 @@ class _ShareSheetState extends ConsumerState<_ShareSheet> {
         ref,
         to: to.id,
         contextType: "post_share",
-        contextText: "${post.authorName}: ${post.caption}",
-        contextMediaUrl: post.cover.isEmpty ? null : post.cover.first,
+        contextText: post.isVideo
+            ? "\u{1F3AC} Video · ${post.authorName}: ${post.caption}"
+            : "${post.authorName}: ${post.caption}",
+        // A video URL can't be shown as a picture in the chat.
+        contextMediaUrl: post.isVideo || post.cover.isEmpty
+            ? null
+            : post.cover.first,
       );
       if (mounted) setState(() => _sent.add(to.id));
     } catch (e) {

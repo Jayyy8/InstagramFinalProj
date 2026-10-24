@@ -45,7 +45,9 @@ class _PostVideoState extends State<PostVideo> {
           if (!mounted) return;
           _controller.setLooping(true);
           setState(() => _ready = true);
-          if (widget.autoplay && !widget.thumbnail) _controller.play();
+          if (widget.autoplay && !widget.thumbnail && _onScreen) {
+            _controller.play();
+          }
         })
         .catchError((_) {
           if (mounted) setState(() => _failed = true);
@@ -53,11 +55,31 @@ class _PostVideoState extends State<PostVideo> {
     _controller.addListener(_onTick);
   }
 
+  /// False while the video's page is hidden: another tab is selected or
+  /// a page is open on top. Hidden videos must not keep playing sound.
+  bool _onScreen = true;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final onScreen = TickerMode.valuesOf(context).enabled;
+    if (onScreen == _onScreen) return;
+    _onScreen = onScreen;
+    if (!_ready || widget.thumbnail) return;
+    if (!onScreen) {
+      _controller.pause();
+    } else if (widget.autoplay) {
+      _controller.play();
+    }
+  }
+
   @override
   void didUpdateWidget(covariant PostVideo oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!_ready || widget.thumbnail) return;
-    if (widget.autoplay && !oldWidget.autoplay) _controller.play();
+    if (widget.autoplay && !oldWidget.autoplay && _onScreen) {
+      _controller.play();
+    }
     if (!widget.autoplay && oldWidget.autoplay) _controller.pause();
   }
 

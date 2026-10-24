@@ -116,7 +116,12 @@ class ChatNotifier
             if (id is String) _remove(id);
           },
         )
-        // Reactions added, changed or removed by either person.
+        .subscribe();
+    // Reactions added, changed or removed by either person. Separate
+    // channel: if the reactions table is missing (schema.sql not re-run),
+    // only reactions stop updating live, not the messages.
+    final reactions = client
+        .channel("reactions:$me:$partnerId")
         .onPostgresChanges(
           event: PostgresChangeEvent.all,
           schema: "public",
@@ -129,7 +134,10 @@ class ChatNotifier
           },
         )
         .subscribe();
-    ref.onDispose(() => client.removeChannel(channel));
+    ref.onDispose(() {
+      client.removeChannel(channel);
+      client.removeChannel(reactions);
+    });
 
     final messages = await repo.messagesWith(partnerId);
     await repo.markRead(partnerId).catchError((_) {});

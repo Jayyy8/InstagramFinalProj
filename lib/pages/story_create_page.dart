@@ -457,17 +457,20 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
                 children: [
                   _RoundTool(
                     icon: CupertinoIcons.xmark,
+                    semantics: "Close",
                     onTap: () => Navigator.of(context).pop(),
                   ),
                   const Spacer(),
                   _RoundTool(label: "Aa", onTap: _startText),
                   const SizedBox(width: 8),
                   _RoundTool(
+                    semantics: "Add music",
                     icon: CupertinoIcons.music_note_2,
                     onTap: _music == null ? _pickMusic : _musicMenu,
                   ),
                   const SizedBox(width: 8),
                   _RoundTool(
+                    semantics: "Add location",
                     icon: CupertinoIcons.location_solid,
                     onTap: _pickLocation,
                   ),
@@ -646,12 +649,22 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
 class _RoundTool extends StatelessWidget {
   final IconData? icon;
   final String? label;
+  final String? semantics;
   final VoidCallback onTap;
 
-  const _RoundTool({this.icon, this.label, required this.onTap});
+  const _RoundTool({
+    this.icon,
+    this.label,
+    this.semantics,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    return Semantics(button: true, label: semantics ?? label, child: _tool());
+  }
+
+  Widget _tool() {
     return GestureDetector(
       onTap: onTap,
       child: Container(

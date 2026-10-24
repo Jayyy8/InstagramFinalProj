@@ -253,6 +253,7 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               _ComposerTool(
+                label: "Add music",
                 icon: CupertinoIcons.music_note_2,
                 color: const Color(0xFFD62976),
                 active: _music != null,
@@ -260,6 +261,7 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
               ),
               const SizedBox(width: 12),
               _ComposerTool(
+                label: "Add location",
                 icon: CupertinoIcons.location_solid,
                 color: const Color(0xFF4F5BD5),
                 active: _location != null,
@@ -470,12 +472,14 @@ class _NoteViewerState extends ConsumerState<_NoteViewer> {
 }
 
 class _ComposerTool extends StatelessWidget {
+  final String label;
   final IconData icon;
   final Color color;
   final bool active;
   final VoidCallback onTap;
 
   const _ComposerTool({
+    required this.label,
     required this.icon,
     required this.color,
     required this.active,
@@ -484,17 +488,21 @@ class _ComposerTool extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 40,
-        height: 32,
-        decoration: BoxDecoration(
-          color: active ? color.withValues(alpha: 0.18) : null,
-          border: Border.all(color: color.withValues(alpha: 0.6)),
-          borderRadius: BorderRadius.circular(10),
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 40,
+          height: 32,
+          decoration: BoxDecoration(
+            color: active ? color.withValues(alpha: 0.18) : null,
+            border: Border.all(color: color.withValues(alpha: 0.6)),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, size: 18, color: color),
         ),
-        child: Icon(icon, size: 18, color: color),
       ),
     );
   }

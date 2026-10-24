@@ -257,9 +257,23 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
           : Duration(milliseconds: slide.durationMs);
       await controller.seekTo(Duration.zero);
     } else {
-      _progress.duration = Duration(milliseconds: slide.durationMs);
+      // Photo slides wait for the photo (see _photoReady), like Instagram:
+      // a slow photo must not use up its time while still black.
+      _progress.duration = null;
+      if (_photoShown == slide.id) _photoReady(slide.id);
     }
     if (mounted) _syncPlayback();
+  }
+
+  /// Id of the photo slide whose photo is on screen.
+  String? _photoShown;
+
+  void _photoReady(String slideId) {
+    _photoShown = slideId;
+    if (!mounted || _slide.id != slideId || _slide.isVideo) return;
+    if (_progress.duration != null) return;
+    _progress.duration = Duration(milliseconds: _slide.durationMs);
+    _syncPlayback();
   }
 
   void _next() {
@@ -464,7 +478,11 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
                               ),
                             )
                     else
-                      FeedImage(urls: slide.imageUrls),
+                      FeedImage(
+                        key: ValueKey(slide.id),
+                        urls: slide.imageUrls,
+                        onReady: () => _photoReady(slide.id),
+                      ),
                     // Shade so the header stays readable.
                     const IgnorePointer(
                       child: DecoratedBox(

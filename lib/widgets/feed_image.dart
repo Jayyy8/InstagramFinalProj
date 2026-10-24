@@ -13,7 +13,16 @@ class FeedImage extends StatefulWidget {
   final List<String> urls;
   final BoxFit fit;
 
-  const FeedImage({super.key, required this.urls, this.fit = BoxFit.cover});
+  /// Called once the photo is shown, or when no URL could be loaded
+  /// (stories start their timer then).
+  final VoidCallback? onReady;
+
+  const FeedImage({
+    super.key,
+    required this.urls,
+    this.fit = BoxFit.cover,
+    this.onReady,
+  });
 
   @override
   State<FeedImage> createState() => _FeedImageState();
@@ -21,6 +30,15 @@ class FeedImage extends StatefulWidget {
 
 class _FeedImageState extends State<FeedImage> {
   int _index = 0;
+  bool _reported = false;
+
+  void _ready() {
+    if (_reported || widget.onReady == null) return;
+    _reported = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onReady!();
+    });
+  }
 
   // Wikimedia asks apps to identify themselves.
   static const Map<String, String> _headers = {
@@ -34,12 +52,14 @@ class _FeedImageState extends State<FeedImage> {
         widget.urls.isEmpty ||
         oldWidget.urls.first != widget.urls.first) {
       _index = 0;
+      _reported = false;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.urls.isEmpty || _index >= widget.urls.length) {
+      _ready();
       return const _FailedPlaceholder();
     }
 
@@ -64,6 +84,10 @@ class _FeedImageState extends State<FeedImage> {
       fit: widget.fit,
       width: double.infinity,
       height: double.infinity,
+      frameBuilder: (context, child, frame, synchronous) {
+        if (frame != null || synchronous) _ready();
+        return child;
+      },
       loadingBuilder: (context, child, progress) {
         return progress == null ? child : const _LoadingPlaceholder();
       },

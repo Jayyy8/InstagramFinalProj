@@ -190,7 +190,7 @@ class _HomePageState extends ConsumerState<HomePage>
     final notifications = ref.watch(unseenActivityProvider);
     final colors = AppColors.of(context);
 
-    return AdaptiveScaffold(
+    final scaffold = AdaptiveScaffold(
       backgroundColor: colors.background,
       appBar: _appBar(username, notifications),
       bottomNavigationBar: AdaptiveBottomNavigationBar(
@@ -277,6 +277,15 @@ class _HomePageState extends ConsumerState<HomePage>
           ],
         ),
       ),
+    );
+
+    // Android back button: other tabs go back to Home first, like Instagram.
+    return PopScope(
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _index != 0) setState(() => _index = 0);
+      },
+      child: scaffold,
     );
   }
 }

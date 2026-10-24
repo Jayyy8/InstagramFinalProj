@@ -851,7 +851,9 @@ class SocialRepository {
         .limit(100);
     final images = {
       for (final p in myPosts)
-        p["id"] as String: _imageUrls(p).isEmpty ? null : _imageUrls(p).first,
+        p["id"] as String: p["media_type"] == "video" || _imageUrls(p).isEmpty
+            ? null
+            : _imageUrls(p).first,
     };
     final postIds = images.keys.toList();
 
