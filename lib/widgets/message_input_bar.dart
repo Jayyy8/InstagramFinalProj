@@ -15,6 +15,10 @@ class MessageInputBar extends StatefulWidget {
   final FocusNode? focusNode;
   final bool autofocus;
 
+  /// Icons shown at the end while the field is empty (chat: mic, photo,
+  /// sticker, more). Typing replaces them with the send button.
+  final List<MessageBarAction> emptyActions;
+
   const MessageInputBar({
     super.key,
     required this.controller,
@@ -24,6 +28,7 @@ class MessageInputBar extends StatefulWidget {
     this.leading,
     this.focusNode,
     this.autofocus = false,
+    this.emptyActions = const [],
   });
 
   @override
@@ -80,12 +85,13 @@ class _MessageInputBarState extends State<MessageInputBar> {
                           height: 34,
                           decoration: const BoxDecoration(
                             shape: BoxShape.circle,
-                            color: kIgMessageBlue,
+                            gradient: kIgMessageGradient,
                           ),
                           child: const Icon(
                             CupertinoIcons.camera_fill,
                             size: 18,
                             color: Color(0xFFFFFFFF),
+                            semanticLabel: "Camera",
                           ),
                         ),
                       ),
@@ -114,7 +120,32 @@ class _MessageInputBarState extends State<MessageInputBar> {
                       onSubmitted: (_) => widget.onSend(),
                     ),
                   ),
-                  if (hasText)
+                  if (hasText && widget.emptyActions.isNotEmpty)
+                    // Chat: round purple send button.
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 5, left: 4),
+                      child: Semantics(
+                        button: true,
+                        label: "Send",
+                        child: GestureDetector(
+                          onTap: widget.onSend,
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: kIgMessageGradient,
+                            ),
+                            child: const Icon(
+                              CupertinoIcons.paperplane_fill,
+                              size: 17,
+                              color: Color(0xFFFFFFFF),
+                            ),
+                          ),
+                        ),
+                      ),
+                    )
+                  else if (hasText)
                     CupertinoButton(
                       padding: const EdgeInsets.fromLTRB(8, 0, 10, 12),
                       minimumSize: const Size(40, 40),
@@ -127,7 +158,19 @@ class _MessageInputBarState extends State<MessageInputBar> {
                           fontSize: 15,
                         ),
                       ),
-                    ),
+                    )
+                  else
+                    for (final a in widget.emptyActions)
+                      Semantics(
+                        button: true,
+                        label: a.label,
+                        child: CupertinoButton(
+                          padding: const EdgeInsets.fromLTRB(5, 0, 5, 10),
+                          minimumSize: const Size(34, 40),
+                          onPressed: a.onTap,
+                          child: Icon(a.icon, size: 25, color: colors.text),
+                        ),
+                      ),
                 ],
               ),
             ),
@@ -136,4 +179,17 @@ class _MessageInputBarState extends State<MessageInputBar> {
       ),
     );
   }
+}
+
+/// An icon in the message bar (see [MessageInputBar.emptyActions]).
+class MessageBarAction {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const MessageBarAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 }

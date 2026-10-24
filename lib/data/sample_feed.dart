@@ -199,6 +199,85 @@ List<FeedPost> buildSamplePosts() {
       ],
     ),
     ..._profileOnlyPosts(),
+    ..._sampleReels(),
+  ];
+}
+
+/// Short public sample videos for Reels (and the channels' Reels tabs).
+/// Sources: test-videos.co.uk (Big Buck Bunny and Sintel by the Blender
+/// Foundation, CC BY; Jellyfish by jell.yfish.us), samplelib.com, and
+/// MDN's CC0 sample video.
+List<FeedPost> _sampleReels() {
+  const reels = [
+    (
+      "r_docs_1",
+      _docs,
+      FeedCategory.docs,
+      "https://test-videos.co.uk/vids/jellyfish/mp4/h264/720/Jellyfish_720_10s_1MB.mp4",
+      "Jellyfish drifting through the deep. Full episode Friday.",
+      "Pacific Ocean",
+      18240,
+    ),
+    (
+      "r_news_1",
+      _news,
+      FeedCategory.news,
+      "https://download.samplelib.com/mp4/sample-10s.mp4",
+      "City life this morning. Live coverage at 9.",
+      "Downtown",
+      7310,
+    ),
+    (
+      "r_hoops_1",
+      _hoops,
+      FeedCategory.nba,
+      "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4",
+      "Halftime show: Big Buck Bunny (Blender Foundation).",
+      "Arena",
+      25600,
+    ),
+    (
+      "r_docs_2",
+      _docs,
+      FeedCategory.docs,
+      "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+      "Spring in slow motion.",
+      "Botanical Garden",
+      9930,
+    ),
+    (
+      "r_match_1",
+      _match,
+      FeedCategory.football,
+      "https://test-videos.co.uk/vids/sintel/mp4/h264/720/Sintel_720_10s_1MB.mp4",
+      "Matchday mood: Sintel (Blender Foundation).",
+      "Stadium",
+      14480,
+    ),
+    (
+      "r_news_2",
+      _news,
+      FeedCategory.news,
+      "https://download.samplelib.com/mp4/sample-5s.mp4",
+      "Five seconds of the evening commute.",
+      "Main Street",
+      4120,
+    ),
+  ];
+  return [
+    for (final (id, channel, category, url, caption, location, likes) in reels)
+      FeedPost(
+        id: id,
+        category: category,
+        channel: channel,
+        imageUrls: [url],
+        isVideo: true,
+        caption: caption,
+        location: location,
+        timeAgoText: "1 day ago",
+        baseLikes: likes,
+        showInFeed: false,
+      ),
   ];
 }
 

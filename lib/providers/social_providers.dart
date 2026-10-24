@@ -222,3 +222,37 @@ class LastAudienceNotifier extends Notifier<Audience> {
 final lastAudienceProvider = NotifierProvider<LastAudienceNotifier, Audience>(
   LastAudienceNotifier.new,
 );
+
+/// Unopened instants from friends (Messages page).
+class InstantsNotifier extends AsyncNotifier<List<Instant>> {
+  @override
+  Future<List<Instant>> build() async {
+    if (ref.watch(currentUserIdProvider) == null) return [];
+    return ref.read(repositoryProvider).instants();
+  }
+
+  Future<void> refresh() async {
+    ref.invalidateSelf();
+    await future;
+  }
+
+  /// Opened: it disappears for you right away.
+  Future<void> markViewed(Instant instant) async {
+    final list = state.valueOrNull ?? const [];
+    state = AsyncData(list.where((i) => i.id != instant.id).toList());
+    await ref.read(repositoryProvider).markInstantViewed(instant.id);
+  }
+
+  Future<void> send(XFile photo, Audience audience) async {
+    await ref.read(repositoryProvider).sendInstant(photo, audience);
+  }
+}
+
+final instantsProvider = AsyncNotifierProvider<InstantsNotifier, List<Instant>>(
+  InstantsNotifier.new,
+);
+
+final relationshipProvider = FutureProvider.autoDispose
+    .family<({bool followsMe, Profile? mutual, int mutualCount}), String>(
+      (ref, id) => ref.watch(repositoryProvider).relationship(id),
+    );

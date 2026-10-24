@@ -8,9 +8,12 @@ import "../../providers/chat_provider.dart";
 import "../../providers/notes_provider.dart";
 import "../../providers/social_providers.dart";
 import "../../theme/app_theme.dart";
+import "../../widgets/android_bars.dart";
 import "../../widgets/dialogs.dart";
 import "../../widgets/gradient_avatar.dart";
 import "../chat_page.dart";
+import "../instant_camera_page.dart";
+import "../instant_viewer_page.dart";
 import "../note_sheets.dart";
 
 /// Inbox: search, notes row, then conversations.
@@ -38,6 +41,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
 
   Future<void> _refresh() async {
     ref.invalidate(notesProvider);
+    ref.invalidate(instantsProvider);
     await ref.read(conversationsProvider.notifier).refresh();
   }
 
@@ -57,7 +61,7 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
         .toList();
     final threads = kChatThreads.where((t) => matches(t.name)).toList();
 
-    return SafeArea(
+    final list = SafeArea(
       bottom: false,
       child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(
@@ -166,6 +170,14 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
         ],
       ),
     );
+
+    return Stack(
+      children: [
+        Positioned.fill(child: list),
+        // Instants tab on the right edge, like Instagram.
+        const Align(alignment: Alignment(1, 0.35), child: _InstantsTab()),
+      ],
+    );
   }
 }
 
@@ -174,6 +186,102 @@ String _bubbleText(Note n) {
   final music = n.music;
   if (music == null || n.body.startsWith("\u266B")) return n.body;
   return "${n.body}\n\u266B ${music.title}";
+}
+
+/// Right-edge tab: friends' unopened instants (tap to view once) and "+"
+/// to send one.
+class _InstantsTab extends ConsumerWidget {
+  const _InstantsTab();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = AppColors.of(context);
+    final instants = ref.watch(instantsProvider).valueOrNull ?? const [];
+    // One avatar per person, newest senders first.
+    final senders = <String, Instant>{};
+    for (final i in instants.reversed) {
+      senders.putIfAbsent(i.profile.id, () => i);
+    }
+    final faces = senders.values.take(2).toList();
+
+    return Container(
+      width: 58,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.dark ? const Color(0xFF262626) : const Color(0xFFEFEFEF),
+        borderRadius: const BorderRadius.horizontal(left: Radius.circular(22)),
+        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10)],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (instants.isNotEmpty) ...[
+            Semantics(
+              button: true,
+              label: "${instants.length} new instants",
+              child: GestureDetector(
+                onTap: () => pushFullscreen(
+                  context,
+                  InstantViewerPage(instants: List.of(instants)),
+                ),
+                child: Badged(
+                  count: instants.length,
+                  child: SizedBox(
+                    width: 40,
+                    height: 40.0 + (faces.length - 1) * 14,
+                    child: Stack(
+                      children: [
+                        for (int i = 0; i < faces.length; i++)
+                          Positioned(
+                            top: i * 14.0,
+                            left: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(2),
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  begin: Alignment.bottomLeft,
+                                  end: Alignment.topRight,
+                                  colors: kStoryRingColors,
+                                ),
+                              ),
+                              child: GradientAvatar(
+                                name: faces[i].profile.username,
+                                imageUrls: faces[i].profile.avatarUrls,
+                                size: 36,
+                                ring: false,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+          Semantics(
+            button: true,
+            label: "New instant",
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => pushFullscreen(context, const InstantCameraPage()),
+              child: SizedBox(
+                width: 58,
+                height: 48,
+                child: Icon(
+                  CupertinoIcons.add,
+                  size: 30,
+                  color: colors.secondaryText,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _NotesRow extends ConsumerWidget {

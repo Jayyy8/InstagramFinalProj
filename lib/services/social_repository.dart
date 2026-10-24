@@ -233,6 +233,25 @@ class SocialRepository {
     ]);
   }
 
+  /// For the top of a chat: do they follow you, and one account you
+  /// both follow (with how many in total).
+  Future<({bool followsMe, Profile? mutual, int mutualCount})> relationship(
+    String other,
+  ) async {
+    final results = await Future.wait([followingIds(other), followingIds()]);
+    final theirs = results[0];
+    final mine = results[1];
+    final common = mine.intersection(theirs)
+      ..remove(other)
+      ..remove(me);
+    final first = common.isEmpty ? null : await profile(common.first);
+    return (
+      followsMe: theirs.contains(me),
+      mutual: first,
+      mutualCount: common.length,
+    );
+  }
+
   // ─────────────────────────── Posts ───────────────────────────
 
   static const _postColumns = "*";
@@ -736,6 +755,66 @@ class SocialRepository {
           .delete()
           .eq("note_id", noteId)
           .eq("user_id", me);
+    }
+  }
+
+  // ─────────────────────────── Instants ───────────────────────────
+
+  /// Instants from other people that you haven't opened yet (the database
+  /// leaves out the ones you already viewed), oldest first.
+  Future<List<Instant>> instants() async {
+    final rows = await _db
+        .from("instants")
+        .select()
+        .neq("user_id", me)
+        .gt("expires_at", _now)
+        .order("created_at");
+    final people = await _profiles([
+      for (final r in rows) r["user_id"] as String,
+    ]);
+    return [
+      for (final r in rows)
+        if (people[r["user_id"]] != null)
+          Instant(
+            id: r["id"] as String,
+            profile: people[r["user_id"]]!,
+            mediaUrl: r["media_url"] as String,
+            createdAt:
+                DateTime.tryParse(r["created_at"] as String)?.toLocal() ??
+                DateTime.now(),
+            audience: Audience.fromKey(r["audience"]),
+          ),
+    ];
+  }
+
+  /// How many instants you sent in the last 24 hours.
+  Future<int> myActiveInstants() async {
+    return _db
+        .from("instants")
+        .count()
+        .eq("user_id", me)
+        .gt("expires_at", _now);
+  }
+
+  Future<void> sendInstant(XFile photo, Audience audience) async {
+    final url = await upload("stories", photo);
+    await _db.from("instants").insert({
+      "user_id": me,
+      "media_url": url,
+      "audience": audience.key,
+    });
+  }
+
+  /// Records that you opened an instant; you won't receive it again.
+  Future<void> markInstantViewed(String instantId) async {
+    try {
+      await _db.from("instant_views").insert({
+        "instant_id": instantId,
+        "viewer_id": me,
+      });
+    } on PostgrestException catch (e) {
+      // Already recorded (opened on another phone): nothing to do.
+      if (e.code != "23505") rethrow;
     }
   }
 

@@ -419,3 +419,20 @@ class ActivityItem {
     this.postId,
   });
 }
+
+/// A quick photo for friends. Each person can open it only once.
+class Instant {
+  final String id;
+  final Profile profile;
+  final String mediaUrl;
+  final DateTime createdAt;
+  final Audience audience;
+
+  const Instant({
+    required this.id,
+    required this.profile,
+    required this.mediaUrl,
+    required this.createdAt,
+    this.audience = Audience.friends,
+  });
+}

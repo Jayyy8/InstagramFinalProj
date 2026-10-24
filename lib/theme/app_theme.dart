@@ -7,6 +7,13 @@ const Color kIgBlue = Color(0xFF0095F6);
 /// Bubble color for messages you send.
 const Color kIgMessageBlue = Color(0xFF3797F0);
 
+/// Instagram's purple-blue for messages you send and the chat camera.
+const LinearGradient kIgMessageGradient = LinearGradient(
+  begin: Alignment.topLeft,
+  end: Alignment.bottomRight,
+  colors: [Color(0xFF4F5BF5), Color(0xFF8A3FFC)],
+);
+
 /// Like / notification red.
 const Color kIgRed = Color(0xFFFF3040);
 

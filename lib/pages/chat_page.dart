@@ -215,6 +215,76 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  void _notAvailable(String what) {
+    showInfo(
+      context,
+      title: what,
+      message: "$what aren't available in this version of the app.",
+    );
+  }
+
+  Future<void> _photoFrom(ImageSource source) async {
+    try {
+      final photo = await _picker.pickImage(
+        source: source,
+        imageQuality: 80,
+        maxWidth: 1440,
+      );
+      if (photo != null) await _send(photo: photo);
+    } catch (e) {
+      if (mounted) showToast(context, errorText(e), error: true);
+    }
+  }
+
+  /// Big emoji "stickers": tap one to send it.
+  void _stickers() {
+    const emojis = [
+      "\u2764\uFE0F",
+      "\u{1F602}",
+      "\u{1F60D}",
+      "\u{1F525}",
+      "\u{1F44D}",
+      "\u{1F622}",
+      "\u{1F62E}",
+      "\u{1F64F}",
+      "\u{1F389}",
+      "\u{1F60E}",
+      "\u{1F914}",
+      "\u{1F44F}",
+      "\u{1F4AF}",
+      "\u{1F97A}",
+      "\u{1F606}",
+      "\u{1F643}",
+      "\u{1F918}",
+      "\u{1F4AA}",
+      "\u{1F31F}",
+      "\u{1F340}",
+    ];
+    showIgSheet<void>(
+      context,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        child: Wrap(
+          alignment: WrapAlignment.center,
+          children: [
+            for (final e in emojis)
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  _controller.text = e;
+                  _send();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(e, style: const TextStyle(fontSize: 38)),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _openProfile() {
     push(
       context,
@@ -242,22 +312,38 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             GradientAvatar(
               name: partner.username,
               imageUrls: partner.avatarUrls,
-              size: 30,
+              size: 34,
               ring: false,
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  partner.displayName,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: colors.text,
-                    decoration: TextDecoration.none,
-                  ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 160),
+                      child: Text(
+                        partner.displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: colors.text,
+                          decoration: TextDecoration.none,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Icon(
+                      CupertinoIcons.chevron_forward,
+                      size: 13,
+                      color: colors.text,
+                    ),
+                  ],
                 ),
                 Text(
                   activeStatus(partner.lastActiveAt).isEmpty
@@ -277,9 +363,15 @@ class _ChatPageState extends ConsumerState<ChatPage> {
       actions: [
         barAction(
           context,
-          const AppIcon("info.circle", CupertinoIcons.info),
-          label: "Profile",
-          onPressed: _openProfile,
+          const AppIcon("phone", CupertinoIcons.phone),
+          label: "Audio call",
+          onPressed: () => _notAvailable("Audio calls"),
+        ),
+        barAction(
+          context,
+          const AppIcon("video", CupertinoIcons.video_camera),
+          label: "Video call",
+          onPressed: () => _notAvailable("Video calls"),
         ),
       ],
       child: Column(
@@ -353,7 +445,29 @@ class _ChatPageState extends ConsumerState<ChatPage> {
             focusNode: _focus,
             placeholder: "Message...",
             onSend: _send,
-            onCamera: _pickPhoto,
+            onCamera: () => _photoFrom(ImageSource.camera),
+            emptyActions: [
+              MessageBarAction(
+                icon: CupertinoIcons.mic,
+                label: "Voice message",
+                onTap: () => _notAvailable("Voice messages"),
+              ),
+              MessageBarAction(
+                icon: CupertinoIcons.photo,
+                label: "Photo library",
+                onTap: () => _photoFrom(ImageSource.gallery),
+              ),
+              MessageBarAction(
+                icon: CupertinoIcons.smiley,
+                label: "Stickers",
+                onTap: _stickers,
+              ),
+              MessageBarAction(
+                icon: CupertinoIcons.add_circled,
+                label: "More",
+                onTap: _pickPhoto,
+              ),
+            ],
           ),
         ],
       ),
@@ -394,48 +508,7 @@ class _MessageList extends StatelessWidget {
       itemBuilder: (context, i) {
         // Top of the chat: who you are talking to.
         if (i == reversed.length) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(vertical: 24),
-            child: Column(
-              children: [
-                GradientAvatar(
-                  name: partner.username,
-                  imageUrls: partner.avatarUrls,
-                  size: 90,
-                  ring: false,
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  partner.displayName,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: colors.text,
-                  ),
-                ),
-                Text(
-                  "${partner.username} · Instagram",
-                  style: TextStyle(color: colors.secondaryText),
-                ),
-                const SizedBox(height: 12),
-                CupertinoButton(
-                  color: colors.button,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  minimumSize: const Size(10, 32),
-                  borderRadius: BorderRadius.circular(8),
-                  onPressed: onOpenProfile,
-                  child: Text(
-                    "View profile",
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: colors.text,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
+          return _ChatIntro(partner: partner, onOpenProfile: onOpenProfile);
         }
 
         final m = reversed[i];
@@ -763,9 +836,8 @@ class _Bubble extends StatelessWidget {
                   vertical: 10,
                 ),
                 decoration: BoxDecoration(
-                  color: mine
-                      ? kIgMessageBlue.withValues(alpha: m.pending ? 0.6 : 1)
-                      : colors.theirBubble,
+                  color: mine ? null : colors.theirBubble,
+                  gradient: mine ? kIgMessageGradient : null,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Text(
@@ -890,6 +962,101 @@ class _LocalChatPageState extends ConsumerState<LocalChatPage> {
             controller: _controller,
             placeholder: "Message...",
             onSend: _send,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Top of a chat, like Instagram: photo, name, username, counts, how you
+/// are connected, and View profile.
+class _ChatIntro extends ConsumerWidget {
+  final Profile partner;
+  final VoidCallback onOpenProfile;
+
+  const _ChatIntro({required this.partner, required this.onOpenProfile});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = AppColors.of(context);
+    final stats = ref.watch(profileStatsProvider(partner.id)).valueOrNull;
+    final relation = ref.watch(relationshipProvider(partner.id)).valueOrNull;
+    final iFollow = (ref.watch(followingProvider).valueOrNull ?? const {})
+        .contains(partner.id);
+    final followsMe = relation?.followsMe ?? false;
+
+    final grey = TextStyle(fontSize: 15, color: colors.secondaryText);
+    String? connection;
+    if (iFollow && followsMe) {
+      connection = "You follow each other on Instagram";
+    } else if (iFollow) {
+      connection = "You follow this account on Instagram";
+    } else if (followsMe) {
+      connection = "Follows you on Instagram";
+    }
+    String? mutual;
+    final m = relation?.mutual;
+    if (m != null) {
+      final others = (relation?.mutualCount ?? 1) - 1;
+      mutual = others > 0
+          ? "You both follow ${m.username} and $others other${others == 1 ? '' : 's'}"
+          : "You both follow ${m.username}";
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 28, 16, 28),
+      child: Column(
+        children: [
+          GradientAvatar(
+            name: partner.username,
+            imageUrls: partner.avatarUrls,
+            size: 96,
+            ring: false,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            partner.displayName,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: colors.text,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(partner.username, style: grey),
+          if (stats != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              "${compactCount(stats.followers)} follower${stats.followers == 1 ? '' : 's'}"
+              " \u00B7 ${formatCount(stats.posts)} post${stats.posts == 1 ? '' : 's'}",
+              style: grey,
+            ),
+          ],
+          if (connection != null) ...[
+            const SizedBox(height: 2),
+            Text(connection, textAlign: TextAlign.center, style: grey),
+          ],
+          if (mutual != null) ...[
+            const SizedBox(height: 2),
+            Text(mutual, textAlign: TextAlign.center, style: grey),
+          ],
+          const SizedBox(height: 16),
+          CupertinoButton(
+            color: colors.button,
+            padding: const EdgeInsets.symmetric(horizontal: 22),
+            minimumSize: const Size(10, 38),
+            borderRadius: BorderRadius.circular(10),
+            onPressed: onOpenProfile,
+            child: Text(
+              "View profile",
+              style: TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: colors.text,
+              ),
+            ),
           ),
         ],
       ),

@@ -126,8 +126,8 @@ final feedProvider = Provider<List<FeedPost>>((ref) {
   ];
 });
 
-/// Reels: video posts from you and the people you follow, then the sample
-/// channels. Photo posts of real accounts stay in the feed only.
+/// Reels: videos only. Video posts from you and the people you follow
+/// first, then the sample channels' reels.
 final reelsProvider = Provider<List<FeedPost>>((ref) {
   final ids = ref.watch(homeFeedProvider).valueOrNull ?? const [];
   final cache = ref.watch(postCacheProvider);
@@ -135,7 +135,7 @@ final reelsProvider = Provider<List<FeedPost>>((ref) {
   return [
     for (final id in ids)
       if (cache[id] != null && cache[id]!.isVideo) cache[id]!,
-    ...samples.where((p) => p.showInFeed),
+    ...samples.where((p) => p.isVideo),
   ];
 });
 

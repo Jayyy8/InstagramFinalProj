@@ -171,10 +171,11 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Avatar with note bubble and story ring.
+              // Avatar with story ring; the note bubble sits above its
+              // top-right edge, its dots trailing down onto the avatar.
               SizedBox(
                 width: 96,
-                height: 128,
+                height: 124,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -210,8 +211,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                     ),
                     if (note != null || isMe)
                       Positioned(
-                        left: 0,
-                        top: 0,
+                        left: 66,
+                        top: 4,
                         child: GestureDetector(
                           onTap: () {
                             if (isMe) {
@@ -223,7 +224,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                           child: NoteBubble(
                             text: note?.body ?? "Ask friends anything...",
                             placeholder: note == null,
-                            maxWidth: 96,
+                            maxWidth: 100,
                           ),
                         ),
                       ),

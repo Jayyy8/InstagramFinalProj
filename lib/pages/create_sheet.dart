@@ -4,11 +4,12 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "../navigation.dart";
 import "../theme/app_theme.dart";
 import "../widgets/dialogs.dart";
+import "instant_camera_page.dart";
 import "new_post_page.dart";
 import "note_sheets.dart";
 import "story_create_page.dart";
 
-/// The "+" menu: Create → Reel, Post, Story, Note, Live.
+/// The "+" menu: Create → Reel, Post, Story, Instants, Note, Live.
 void showCreateSheet(BuildContext context, WidgetRef ref) {
   void notAvailable(String what) => showInfo(
     context,
@@ -27,6 +28,11 @@ void showCreateSheet(BuildContext context, WidgetRef ref) {
       CupertinoIcons.plus_circle,
       "Story",
       () => pushFullscreen(context, const StoryCreatePage()),
+    ),
+    (
+      CupertinoIcons.camera_viewfinder,
+      "Instants",
+      () => pushFullscreen(context, const InstantCameraPage()),
     ),
     (CupertinoIcons.chat_bubble_text, "Note", () => showNoteComposer(context)),
     (

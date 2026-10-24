@@ -602,3 +602,73 @@ create policy "notes write own" on public.notes
 drop policy if exists "stories update own" on public.stories;
 create policy "stories update own" on public.stories
   for update to authenticated using (user_id = auth.uid());
+
+-- ════════════════════ Update 4: Instants ════════════════════
+-- Quick photos for friends, opened from the Messages page. Each person can
+-- view someone else's instant only once: after that the database stops
+-- returning it to them. Instants disappear after 24 hours.
+
+create table if not exists public.instants (
+  id         uuid primary key default gen_random_uuid(),
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  media_url  text not null,
+  audience   text not null default 'friends',
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '24 hours'
+);
+create index if not exists instants_user_idx on public.instants (user_id, created_at desc);
+
+create table if not exists public.instant_views (
+  instant_id uuid not null references public.instants (id) on delete cascade,
+  viewer_id  uuid not null references public.profiles (id) on delete cascade,
+  viewed_at  timestamptz not null default now(),
+  primary key (instant_id, viewer_id)
+);
+
+alter table public.instants      enable row level security;
+alter table public.instant_views enable row level security;
+
+-- Helpers that read the other table without its rules (avoids the two
+-- tables' rules checking each other forever).
+create or replace function public.instant_seen_by_me(instant uuid)
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from instant_views v
+    where v.instant_id = instant and v.viewer_id = auth.uid()
+  );
+$$;
+
+create or replace function public.instant_owner(instant uuid)
+returns uuid
+language sql stable security definer set search_path = public
+as $$
+  select user_id from instants where id = instant;
+$$;
+
+drop policy if exists "instants read once" on public.instants;
+create policy "instants read once" on public.instants
+  for select to authenticated using (
+    user_id = auth.uid()
+    or (
+      expires_at > now()
+      and public.can_view(user_id, audience)
+      and not public.instant_seen_by_me(id)
+    )
+  );
+drop policy if exists "instants insert own" on public.instants;
+create policy "instants insert own" on public.instants
+  for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists "instants delete own" on public.instants;
+create policy "instants delete own" on public.instants
+  for delete to authenticated using (user_id = auth.uid());
+
+drop policy if exists "instant views read" on public.instant_views;
+create policy "instant views read" on public.instant_views
+  for select to authenticated using (
+    viewer_id = auth.uid() or public.instant_owner(instant_id) = auth.uid()
+  );
+drop policy if exists "instant views insert own" on public.instant_views;
+create policy "instant views insert own" on public.instant_views
+  for insert to authenticated with check (viewer_id = auth.uid());

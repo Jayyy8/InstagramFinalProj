@@ -266,7 +266,20 @@ void main() {
     test("profile-only posts stay out of the feed", () {
       final hidden = posts.where((p) => !p.showInFeed);
       expect(hidden, isNotEmpty);
-      expect(hidden.every((p) => p.id.startsWith("x_")), true);
+      expect(
+        hidden.every((p) => p.id.startsWith("x_") || p.id.startsWith("r_")),
+        true,
+      );
+    });
+
+    test("sample reels are videos and stay out of the feed", () {
+      final reels = posts.where((p) => p.isVideo).toList();
+      expect(reels.length, greaterThanOrEqualTo(5));
+      for (final r in reels) {
+        expect(r.showInFeed, false, reason: r.id);
+        expect(r.imageUrls.single, startsWith("https://"), reason: r.id);
+        expect(r.imageUrls.single, endsWith(".mp4"), reason: r.id);
+      }
     });
 
     test("post ids are unique", () {

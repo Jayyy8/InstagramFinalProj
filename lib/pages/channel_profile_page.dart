@@ -227,7 +227,11 @@ class _ChannelProfilePageState extends ConsumerState<ChannelProfilePage> {
       ],
     );
 
-    final List<FeedPost> shown = _tab == 0 ? posts : const [];
+    final List<FeedPost> shown = switch (_tab) {
+      0 => posts,
+      1 => posts.where((p) => p.isVideo).toList(),
+      _ => const [],
+    };
 
     return SubPage(
       title: handle,
