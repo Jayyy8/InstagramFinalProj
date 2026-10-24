@@ -17,6 +17,8 @@
     <string>Choose photos and videos to share in posts, stories and messages.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Save photos and videos you create.</string>
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Suggest places near you when you add a location to a post, story or note.</string>
     <key>NSCameraUsageDescription</key>
     <string>Take photos and videos for your posts and stories.</string>
     <key>NSMicrophoneUsageDescription</key>

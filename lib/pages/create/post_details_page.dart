@@ -10,6 +10,7 @@ import "../../navigation.dart";
 import "../../providers/feed_provider.dart";
 import "../../providers/social_providers.dart";
 import "../../providers/story_provider.dart";
+import "../../services/location_service.dart";
 import "../../services/music_service.dart";
 import "../../services/photo_editing.dart";
 import "../../theme/app_theme.dart";
@@ -61,6 +62,13 @@ class _PostDetailsPageState extends ConsumerState<PostDetailsPage> {
   bool _commentsOff = false;
   bool _sharing = false;
 
+  /// Places around you for the chips under "Add location".
+  List<String> _nearby = [
+    for (final p in LocationService.cachedNearby ?? const <Place>[]) p.label,
+  ];
+  bool _locating = false;
+  String? _locateProblem;
+
   bool get _video => widget.media.first.video;
 
   @override
@@ -71,6 +79,37 @@ class _PostDetailsPageState extends ConsumerState<PostDetailsPage> {
           if (mounted) setState(() => _songIdeas = songs.take(8).toList());
         })
         .catchError((_) {});
+    // Location already allowed: suggest places right away (no prompt).
+    if (_nearby.isEmpty) {
+      LocationService.allowed().then((ok) {
+        if (ok && mounted) _loadNearby();
+      });
+    }
+  }
+
+  /// "Tap here to show location suggestions": asks for the location the
+  /// first time, then shows your town and places around you.
+  Future<void> _loadNearby() async {
+    setState(() {
+      _locating = true;
+      _locateProblem = null;
+    });
+    final (position, reason) = await LocationService.locate();
+    var problem = reason;
+    List<Place> places = const [];
+    if (position != null) {
+      try {
+        places = await LocationService.nearby(position);
+      } catch (_) {
+        problem = "Couldn't load places near you.";
+      }
+    }
+    if (!mounted) return;
+    setState(() {
+      _locating = false;
+      _locateProblem = problem;
+      _nearby = [for (final p in places.take(10)) p.label];
+    });
   }
 
   @override
@@ -241,7 +280,7 @@ class _PostDetailsPageState extends ConsumerState<PostDetailsPage> {
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     final padding = MediaQuery.paddingOf(context);
-    final places = _recentPlaces();
+    final places = {..._recentPlaces(), ..._nearby}.toList();
     final secondary = TextStyle(fontSize: 12, color: colors.secondaryText);
 
     return SubPage(
@@ -369,14 +408,27 @@ class _PostDetailsPageState extends ConsumerState<PostDetailsPage> {
                           ),
                         ),
                 ),
-                if (_location.isEmpty)
-                  places.isEmpty
+                if (_location.isEmpty && _locating)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 4, 16, 8),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: CupertinoActivityIndicator(),
+                    ),
+                  )
+                else if (_location.isEmpty)
+                  places.isEmpty || _locateProblem != null
                       ? GestureDetector(
-                          onTap: _pickLocation,
+                          onTap: _locateProblem == null
+                              ? _loadNearby
+                              : _pickLocation,
                           child: Padding(
                             padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
                             child: Text(
-                              "Tap here to add a location",
+                              _locateProblem == null
+                                  ? "Tap here to show location suggestions"
+                                  : "$_locateProblem Tap here to search "
+                                        "for a place.",
                               style: TextStyle(
                                 fontSize: 13,
                                 color: colors.secondaryText,

@@ -3,6 +3,7 @@ import "dart:async";
 import "package:flutter/cupertino.dart";
 
 import "../models/social_models.dart";
+import "../services/location_service.dart";
 import "../services/music_service.dart";
 import "../theme/app_theme.dart";
 import "dialogs.dart";
@@ -420,11 +421,13 @@ class LocationChip extends StatelessWidget {
   }
 }
 
-/// Asks for a place name (stories, notes). Returns null when cancelled,
-/// "" to remove the location.
+/// "Add location" like Instagram: search real places, or pick one near you.
+/// Returns the place's label ("Arayat, Pampanga"), null when cancelled, ""
+/// to remove the location. Used by posts, stories and notes.
 Future<String?> askLocation(BuildContext context, {String? current}) {
   return showIgSheet<String>(
     context,
+    heightFactor: 0.9,
     builder: (_) => _LocationSheet(current: current),
   );
 }
@@ -439,79 +442,315 @@ class _LocationSheet extends StatefulWidget {
 }
 
 class _LocationSheetState extends State<_LocationSheet> {
-  late final TextEditingController _controller = TextEditingController(
-    text: widget.current ?? "",
-  );
+  final TextEditingController _query = TextEditingController();
+  Timer? _debounce;
+
+  List<Place> _results = const [];
+  bool _searching = false;
+  String? _searchError;
+
+  /// Places near you (null = not looked up yet).
+  List<Place>? _nearby = LocationService.cachedNearby;
+  bool _locating = false;
+  String? _nearbyError;
+
+  @override
+  void initState() {
+    super.initState();
+    // Already allowed: show nearby places right away (no prompt).
+    if (_nearby == null) {
+      LocationService.allowed().then((ok) {
+        if (ok && mounted) _findNearby();
+      });
+    }
+  }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _debounce?.cancel();
+    _query.dispose();
     super.dispose();
+  }
+
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    setState(() {});
+    if (value.trim().isEmpty) {
+      setState(() {
+        _results = const [];
+        _searching = false;
+        _searchError = null;
+      });
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 450), () => _search(value));
+  }
+
+  Future<void> _search(String value) async {
+    setState(() {
+      _searching = true;
+      _searchError = null;
+    });
+    try {
+      final places = await LocationService.search(value);
+      if (!mounted || value != _query.text) return;
+      setState(() {
+        _results = places;
+        _searching = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _searching = false;
+        _searchError =
+            "Couldn't search places. Check your internet connection.";
+      });
+    }
+  }
+
+  Future<void> _findNearby() async {
+    setState(() {
+      _locating = true;
+      _nearbyError = null;
+    });
+    final (position, problem) = await LocationService.locate();
+    if (!mounted) return;
+    if (position == null) {
+      setState(() {
+        _locating = false;
+        _nearbyError = problem;
+      });
+      return;
+    }
+    try {
+      final places = await LocationService.nearby(position);
+      if (mounted) {
+        setState(() {
+          _nearby = places;
+          _locating = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _locating = false;
+          _nearbyError = "Couldn't load places near you.";
+        });
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     final current = widget.current;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            "Add location",
+    final typed = _query.text.trim();
+
+    Widget placeRow(Place p) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => Navigator.of(context).pop(p.label),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: colors.separator),
+              ),
+              child: Icon(
+                CupertinoIcons.placemark,
+                size: 20,
+                color: colors.text,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    p.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      color: colors.text,
+                    ),
+                  ),
+                  if (p.detail.isNotEmpty)
+                    Text(
+                      p.detail,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    Widget note(String text) => Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      child: Text(
+        text,
+        style: TextStyle(color: colors.secondaryText, fontSize: 14),
+      ),
+    );
+
+    final List<Widget> body;
+    if (typed.isNotEmpty) {
+      body = [
+        if (_searching)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(child: CupertinoActivityIndicator()),
+          )
+        else if (_searchError != null)
+          note(_searchError!)
+        else if (_results.isEmpty)
+          note("No places found for \"$typed\"."),
+        for (final p in _results) placeRow(p),
+        // Not on the map: keep what you typed.
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => Navigator.of(context).pop(typed),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            child: Text(
+              "Use \"$typed\"",
+              style: const TextStyle(
+                color: kIgBlue,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ];
+    } else {
+      final nearby = _nearby;
+      body = [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: Text(
+            "Nearby",
             style: TextStyle(
               fontWeight: FontWeight.w700,
-              fontSize: 16,
+              fontSize: 15,
               color: colors.text,
             ),
           ),
-          const SizedBox(height: 12),
-          CupertinoTextField(
-            controller: _controller,
-            autofocus: true,
-            placeholder: "Find a location",
-            prefix: Padding(
-              padding: const EdgeInsets.only(left: 10),
-              child: Icon(
-                CupertinoIcons.location,
-                size: 18,
-                color: colors.secondaryText,
-              ),
-            ),
-            placeholderStyle: TextStyle(color: colors.secondaryText),
-            style: TextStyle(color: colors.text),
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: colors.field,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            onSubmitted: (v) => Navigator.of(context).pop(v.trim()),
+        ),
+        if (_locating)
+          const Padding(
+            padding: EdgeInsets.all(20),
+            child: Center(child: CupertinoActivityIndicator()),
+          )
+        else if (nearby != null)
+          if (nearby.isEmpty)
+            note("No places found near you. Search for one above.")
+          else
+            for (final p in nearby) placeRow(p)
+        else ...[
+          // Like Instagram: explain first, then the phone asks.
+          note(
+            _nearbyError ??
+                "Allow location access to see places near you. You can "
+                    "always search for a place instead.",
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              if (current != null && current.isNotEmpty)
-                CupertinoButton(
-                  onPressed: () => Navigator.of(context).pop(""),
-                  child: const Text(
-                    "Remove",
-                    style: TextStyle(color: CupertinoColors.destructiveRed),
-                  ),
-                ),
-              const Spacer(),
-              CupertinoButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(_controller.text.trim()),
-                child: const Text(
-                  "Done",
-                  style: TextStyle(color: kIgBlue, fontWeight: FontWeight.w700),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: CupertinoButton(
+              color: kIgBlue,
+              borderRadius: BorderRadius.circular(10),
+              onPressed: _nearbyError?.contains("settings") ?? false
+                  ? LocationService.openSettings
+                  : _findNearby,
+              child: Text(
+                _nearbyError?.contains("settings") ?? false
+                    ? "Open settings"
+                    : "Show places near me",
+                style: const TextStyle(
+                  color: Color(0xFFFFFFFF),
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            ],
+            ),
           ),
         ],
-      ),
+      ];
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 80,
+                child: current != null && current.isNotEmpty
+                    ? CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        onPressed: () => Navigator.of(context).pop(""),
+                        child: const Text(
+                          "Remove",
+                          style: TextStyle(
+                            color: CupertinoColors.destructiveRed,
+                          ),
+                        ),
+                      )
+                    : null,
+              ),
+              Expanded(
+                child: Text(
+                  "Add location",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                    color: colors.text,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 80),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(14, 6, 14, 6),
+          child: CupertinoSearchTextField(
+            controller: _query,
+            autofocus: _nearby == null,
+            placeholder: "Find a location",
+            style: TextStyle(color: colors.text),
+            // The sheet is the field's color in dark mode: go a step lighter.
+            backgroundColor: colors.dark
+                ? const Color(0xFF363636)
+                : colors.field,
+            borderRadius: BorderRadius.circular(12),
+            onChanged: _onChanged,
+            onSubmitted: (v) {
+              _debounce?.cancel();
+              if (v.trim().isNotEmpty) _search(v);
+            },
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            children: body,
+          ),
+        ),
+      ],
     );
   }
 }

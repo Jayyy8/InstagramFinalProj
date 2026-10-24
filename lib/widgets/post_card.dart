@@ -42,8 +42,44 @@ class _PostCardState extends ConsumerState<PostCard> {
   bool _showTags = false;
   late final PostMusicNotifier _music = ref.read(postMusicProvider.notifier);
 
+  /// The feed's scroll position, watched while this post's song plays.
+  ScrollPosition? _scroll;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final position = Scrollable.maybeOf(context, axis: Axis.vertical)?.position;
+    if (position != _scroll) {
+      _scroll?.removeListener(_checkOnScreen);
+      _scroll = position?..addListener(_checkOnScreen);
+    }
+  }
+
+  /// Stops the song once most of the post has scrolled off screen.
+  void _checkOnScreen() {
+    if (!mounted || ref.read(postMusicProvider) != widget.post.id) return;
+    final box = context.findRenderObject() as RenderBox?;
+    final viewport =
+        Scrollable.maybeOf(
+              context,
+              axis: Axis.vertical,
+            )?.context.findRenderObject()
+            as RenderBox?;
+    if (box == null || viewport == null || !box.attached) return;
+    final top = box.localToGlobal(Offset.zero, ancestor: viewport).dy;
+    final height = box.size.height;
+    final shown =
+        (top + height).clamp(0.0, viewport.size.height) -
+        top.clamp(0.0, viewport.size.height);
+    final needed = height < viewport.size.height
+        ? height
+        : viewport.size.height;
+    if (shown < needed * 0.35) _music.stopIf(widget.post.id);
+  }
+
   @override
   void dispose() {
+    _scroll?.removeListener(_checkOnScreen);
     // The song stops when its post scrolls away.
     _music.stopIf(widget.post.id);
     super.dispose();
