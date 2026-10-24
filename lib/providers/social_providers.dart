@@ -146,6 +146,32 @@ final suggestedProfilesProvider = FutureProvider.autoDispose<List<Profile>>((
   return ref.watch(repositoryProvider).suggestedProfiles(following);
 });
 
-final activityProvider = FutureProvider.autoDispose<List<ActivityItem>>(
+final activityProvider = FutureProvider<List<ActivityItem>>(
   (ref) => ref.watch(repositoryProvider).activity(),
 );
+
+/// Time you last opened Notifications.
+class ActivitySeenNotifier extends Notifier<DateTime?> {
+  @override
+  DateTime? build() {
+    final profile = ref.watch(myProfileProvider).valueOrNull;
+    return profile?.activitySeenAt ?? profile?.lastActiveAt;
+  }
+
+  void markSeen() {
+    state = DateTime.now();
+    ref.read(repositoryProvider).markActivitySeen().catchError((_) {});
+  }
+}
+
+final activitySeenProvider = NotifierProvider<ActivitySeenNotifier, DateTime?>(
+  ActivitySeenNotifier.new,
+);
+
+/// New likes, comments and followers since you last opened Notifications.
+final unseenActivityProvider = Provider<int>((ref) {
+  final items = ref.watch(activityProvider).valueOrNull ?? const [];
+  final seen = ref.watch(activitySeenProvider);
+  if (seen == null) return items.length;
+  return items.where((a) => a.createdAt.isAfter(seen)).length;
+});

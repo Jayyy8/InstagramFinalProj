@@ -5,6 +5,7 @@ import "../data/sample_feed.dart";
 
 import "../models/feed_models.dart";
 import "../navigation.dart";
+import "../pages/channel_profile_page.dart";
 import "../pages/story_viewer_page.dart";
 import "../providers/feed_provider.dart";
 import "../providers/social_providers.dart";
@@ -15,6 +16,7 @@ import "feed_image.dart";
 import "follow_button.dart";
 import "gradient_avatar.dart";
 import "post_actions.dart";
+import "post_video.dart";
 
 /// One post in the feed, laid out like Instagram:
 /// header, photo carousel, action row with counts, caption, comments, time.
@@ -48,7 +50,10 @@ class _PostCardState extends ConsumerState<PostCard> {
 
   void _openAuthor(FeedPost post) {
     final author = post.author;
-    if (author == null) return;
+    if (author == null) {
+      openChannel(context, post.authorName);
+      return;
+    }
     final story = ref.read(storyOfUserProvider(author.id));
     if (story != null) {
       pushFullscreen(context, StoryViewerPage(groups: [story]));
@@ -109,7 +114,11 @@ class _PostCardState extends ConsumerState<PostCard> {
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
-                    if (post.author != null) openProfile(context, post.author!);
+                    if (post.author != null) {
+                      openProfile(context, post.author!);
+                    } else {
+                      openChannel(context, post.authorName);
+                    }
                   },
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -188,7 +197,9 @@ class _PostCardState extends ConsumerState<PostCard> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (photos.length <= 1)
+                if (post.isVideo)
+                  PostVideo(url: post.imageUrls.first)
+                else if (photos.length <= 1)
                   FeedImage(urls: post.cover)
                 else
                   PageView.builder(

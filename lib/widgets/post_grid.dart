@@ -4,6 +4,7 @@ import "../models/feed_models.dart";
 import "../navigation.dart";
 import "../pages/post_detail_page.dart";
 import "feed_image.dart";
+import "post_video.dart";
 
 /// 3-column photo grid. Tapping a photo opens the full post.
 class PostGrid extends StatelessWidget {
@@ -52,8 +53,21 @@ class PostTile extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          FeedImage(urls: post.cover),
-          if (post.photos.length > 1)
+          if (post.isVideo)
+            PostVideo(url: post.imageUrls.first, thumbnail: true)
+          else
+            FeedImage(urls: post.cover),
+          if (post.isVideo)
+            const Positioned(
+              top: 6,
+              right: 6,
+              child: Icon(
+                CupertinoIcons.play_rectangle_fill,
+                size: 16,
+                color: Color(0xFFFFFFFF),
+              ),
+            )
+          else if (post.photos.length > 1)
             const Positioned(
               top: 6,
               right: 6,

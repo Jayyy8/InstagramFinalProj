@@ -6,6 +6,7 @@ import "../navigation.dart";
 import "../providers/chat_provider.dart";
 import "../providers/social_providers.dart";
 import "../theme/app_theme.dart";
+import "../widgets/android_bars.dart";
 import "../widgets/sub_page.dart";
 import "activity_page.dart";
 import "create_sheet.dart";
@@ -50,6 +51,7 @@ class _HomePageState extends ConsumerState<HomePage>
     if (state == AppLifecycleState.resumed) {
       ref.read(repositoryProvider).touchLastActive().catchError((_) {});
       ref.invalidate(conversationsProvider);
+      ref.invalidate(activityProvider);
     }
   }
 
@@ -103,55 +105,76 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  AdaptiveAppBar _appBar(String username) {
+  /// Top bar per tab. [AdaptiveAppBar.appBar] is the flat Instagram bar
+  /// used on Android; iPhones use the native / Cupertino bar.
+  AdaptiveAppBar _appBar(String username, int notifications) {
+    final heart = barAction(
+      context,
+      AppIcons.heart,
+      label: "Notifications",
+      badge: notifications,
+      onPressed: () => push(context, const ActivityPage()),
+    );
+    final compose = barAction(
+      context,
+      AppIcons.compose,
+      label: "New message",
+      onPressed: () => push(context, const NewMessagePage()),
+    );
+    final discover = barAction(
+      context,
+      AppIcons.addPerson,
+      label: "Discover people",
+      onPressed: () => push(context, const DiscoverPeoplePage()),
+    );
+    final menu = barAction(
+      context,
+      AppIcons.menu,
+      label: "Settings and activity",
+      onPressed: () => push(context, const SettingsPage()),
+    );
+
+    AdaptiveAppBar bar({
+      Widget? leading,
+      String? title,
+      Widget? titleWidget,
+      List<AdaptiveAppBarAction> actions = const [],
+      bool center = true,
+    }) {
+      return AdaptiveAppBar(
+        leading: leading,
+        title: title,
+        titleWidget: titleWidget,
+        actions: actions,
+        appBar: IgTopBar.from(
+          context,
+          leading: leading ?? const SizedBox(width: 40),
+          title: title,
+          titleWidget: titleWidget,
+          actions: actions,
+          centerTitle: center,
+        ),
+      );
+    }
+
     switch (_index) {
       case 0:
-        return AdaptiveAppBar(
+        return bar(
           leading: _leadingPlus(),
           titleWidget: _wordmark("Instagram", script: true),
-          actions: [
-            barAction(
-              context,
-              AppIcons.heart,
-              label: "Notifications",
-              onPressed: () => push(context, const ActivityPage()),
-            ),
-          ],
+          actions: [heart],
         );
       case 1:
-        return const AdaptiveAppBar(title: "Reels");
+        return bar(title: "Reels", center: false);
       case 2:
-        return AdaptiveAppBar(
-          titleWidget: _wordmark(username),
-          actions: [
-            barAction(
-              context,
-              AppIcons.compose,
-              label: "New message",
-              onPressed: () => push(context, const NewMessagePage()),
-            ),
-          ],
-        );
+        return bar(titleWidget: _wordmark(username), actions: [compose]);
       case 3:
-        return const AdaptiveAppBar(title: "Search");
+        return bar(title: "Search", center: false);
       default:
-        return AdaptiveAppBar(
+        return bar(
           leading: _leadingPlus(),
           titleWidget: _wordmark(username),
-          actions: [
-            barAction(
-              context,
-              AppIcons.addPerson,
-              label: "Discover people",
-              onPressed: () => push(context, const DiscoverPeoplePage()),
-            ),
-            barAction(
-              context,
-              AppIcons.menu,
-              label: "Settings and activity",
-              onPressed: () => push(context, const SettingsPage()),
-            ),
-          ],
+          actions: [discover, menu],
         );
     }
   }
@@ -164,9 +187,47 @@ class _HomePageState extends ConsumerState<HomePage>
     final username = me?.username ?? "";
     final avatar = me?.avatarUrl;
 
+    final notifications = ref.watch(unseenActivityProvider);
+    final colors = AppColors.of(context);
+
     return AdaptiveScaffold(
-      appBar: _appBar(username),
+      backgroundColor: colors.background,
+      appBar: _appBar(username, notifications),
       bottomNavigationBar: AdaptiveBottomNavigationBar(
+        // Instagram's own icon-only bar on Android.
+        bottomNavigationBar: IgBottomBar(
+          selectedIndex: _index,
+          onTap: (i) => setState(() => _index = i),
+          items: [
+            const IgTabItem(
+              icon: CupertinoIcons.house,
+              selectedIcon: CupertinoIcons.house_fill,
+              label: "Home",
+            ),
+            const IgTabItem(
+              icon: CupertinoIcons.play_rectangle,
+              selectedIcon: CupertinoIcons.play_rectangle_fill,
+              label: "Reels",
+            ),
+            IgTabItem(
+              icon: CupertinoIcons.paperplane,
+              selectedIcon: CupertinoIcons.paperplane_fill,
+              label: "Messages",
+              badge: unread,
+            ),
+            const IgTabItem(
+              icon: CupertinoIcons.search,
+              selectedIcon: CupertinoIcons.search,
+              label: "Search",
+            ),
+            IgTabItem(
+              icon: CupertinoIcons.person_crop_circle,
+              selectedIcon: CupertinoIcons.person_crop_circle_fill,
+              label: "Profile",
+              avatar: me?.avatarUrls,
+            ),
+          ],
+        ),
         selectedIndex: _index,
         onTap: (i) => setState(() => _index = i),
         // Black icons like Instagram on iPhone. On Android this color is
@@ -204,15 +265,17 @@ class _HomePageState extends ConsumerState<HomePage>
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _index,
-        children: const [
-          FeedTab(),
-          ReelsTab(),
-          MessagesTab(),
-          SearchTab(),
-          ProfileTab(),
-        ],
+      body: PageColors(
+        child: IndexedStack(
+          index: _index,
+          children: [
+            const FeedTab(),
+            ReelsTab(active: _index == 1),
+            const MessagesTab(),
+            const SearchTab(),
+            const ProfileTab(),
+          ],
+        ),
       ),
     );
   }

@@ -45,8 +45,10 @@ class NotesNotifier extends AsyncNotifier<NotesState> {
     return NotesState(mine: mine, others: [...others, ..._sampleNotes()]);
   }
 
-  Future<void> setNote(String text) async {
-    await ref.read(repositoryProvider).setNote(text);
+  Future<void> setNote(String text, {String? location, Music? music}) async {
+    await ref
+        .read(repositoryProvider)
+        .setNote(text, location: location, music: music);
     ref.invalidateSelf();
     await future;
   }

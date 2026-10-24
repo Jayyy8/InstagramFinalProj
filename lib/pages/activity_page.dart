@@ -15,11 +15,31 @@ import "../widgets/sub_page.dart";
 import "post_detail_page.dart";
 
 /// Notifications (heart icon): new followers, likes and comments.
-class ActivityPage extends ConsumerWidget {
+class ActivityPage extends ConsumerStatefulWidget {
   const ActivityPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ActivityPage> createState() => _ActivityPageState();
+}
+
+class _ActivityPageState extends ConsumerState<ActivityPage> {
+  /// Items newer than this are listed under "New".
+  late final DateTime? _seenBefore = ref.read(activitySeenProvider);
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.invalidate(activityProvider);
+      ref.read(activitySeenProvider.notifier).markSeen();
+    });
+  }
+
+  bool _isNew(ActivityItem a) =>
+      _seenBefore == null || a.createdAt.isAfter(_seenBefore);
+
+  @override
+  Widget build(BuildContext context) {
     final colors = AppColors.of(context);
     final items = ref.watch(activityProvider);
     final following = ref.watch(followingProvider).valueOrNull ?? const {};
@@ -86,7 +106,9 @@ class ActivityPage extends ConsumerWidget {
               itemCount: list.length,
               itemBuilder: (context, i) {
                 final a = list[i];
-                return GestureDetector(
+                final fresh = _isNew(a);
+                final header = i == 0 || _isNew(list[i - 1]) != fresh;
+                final row = GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTap: () {
                     if (a.postId != null) {
@@ -164,6 +186,29 @@ class ActivityPage extends ConsumerWidget {
                       ],
                     ),
                   ),
+                );
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (header)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+                        child: Text(
+                          fresh ? "New" : "Earlier",
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: colors.text,
+                          ),
+                        ),
+                      ),
+                    ColoredBox(
+                      color: fresh
+                          ? kIgBlue.withValues(alpha: 0.08)
+                          : const Color(0x00000000),
+                      child: row,
+                    ),
+                  ],
                 );
               },
             ),

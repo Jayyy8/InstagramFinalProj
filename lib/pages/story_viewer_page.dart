@@ -10,10 +10,13 @@ import "../navigation.dart";
 import "../providers/chat_provider.dart";
 import "../providers/social_providers.dart";
 import "../providers/story_provider.dart";
+import "../services/music_service.dart";
 import "../theme/app_theme.dart";
 import "../widgets/dialogs.dart";
 import "../widgets/feed_image.dart";
 import "../widgets/gradient_avatar.dart";
+import "../widgets/music_picker.dart";
+import "channel_profile_page.dart";
 import "profile_page.dart";
 import "story_create_page.dart";
 
@@ -132,6 +135,9 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
   final FocusNode _replyFocus = FocusNode();
 
   VideoPlayerController? _video;
+
+  /// Song of the current story.
+  final PreviewPlayer _audio = PreviewPlayer();
   int _index = 0;
   bool _holding = false;
   bool _liked = false;
@@ -168,6 +174,7 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
   void dispose() {
     _progress.dispose();
     _video?.dispose();
+    _audio.stop();
     _reply.dispose();
     _replyFocus.dispose();
     super.dispose();
@@ -191,10 +198,12 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
     if (_shouldPause) {
       _progress.stop();
       _video?.pause();
+      _audio.pause();
     } else if (_progress.duration != null &&
         (_slide.isVideo ? _video?.value.isInitialized == true : true)) {
       _progress.forward();
       _video?.play();
+      _audio.resume();
     }
     setState(() {});
   }
@@ -206,7 +215,14 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
     final old = _video;
     _video = null;
     await old?.dispose();
+    await _audio.stop();
     _liked = false;
+
+    if (slide.music != null) {
+      _audio.play(slide.music!.previewUrl).then((_) {
+        if (mounted && _shouldPause) _audio.pause();
+      });
+    }
 
     ref.read(seenStoriesProvider.notifier).markSeen(slide);
 
@@ -473,6 +489,31 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
                                 child: StoryOverlayText(overlay: o),
                               ),
                             ),
+                          if (slide.location != null &&
+                              slide.location!.isNotEmpty)
+                            Positioned(
+                              top: box.maxHeight * 0.16,
+                              left: 24,
+                              right: 24,
+                              child: IgnorePointer(
+                                child: Center(
+                                  child: LocationChip(
+                                    location: slide.location!,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          if (slide.music != null)
+                            Positioned(
+                              top: box.maxHeight * 0.7,
+                              left: 24,
+                              right: 24,
+                              child: IgnorePointer(
+                                child: Center(
+                                  child: MusicChip(music: slide.music!),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                     ),
@@ -500,53 +541,87 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
                   Row(
                     children: [
                       const SizedBox(width: 4),
-                      GestureDetector(
-                        onTap: group.profile == null
-                            ? null
-                            : () => push(
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: () {
+                            if (group.profile != null) {
+                              push(
                                 context,
                                 ProfilePage(
                                   userId: group.profile!.id,
                                   initial: group.profile,
                                 ),
+                              );
+                            } else if (!group.isMine) {
+                              openChannel(context, group.username);
+                            }
+                          },
+                          child: Row(
+                            children: [
+                              GradientAvatar(
+                                name: group.username,
+                                imageUrls: group.avatarUrls,
+                                size: 32,
+                                ring: false,
                               ),
-                        child: Row(
-                          children: [
-                            GradientAvatar(
-                              name: group.username,
-                              imageUrls: group.avatarUrls,
-                              size: 32,
-                              ring: false,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              group.isMine ? "Your story" : group.username,
-                              style: const TextStyle(
-                                color: Color(0xFFFFFFFF),
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
-                              ),
-                            ),
-                            if (group.verified) ...[
-                              const SizedBox(width: 4),
-                              const Icon(
-                                CupertinoIcons.checkmark_seal_fill,
-                                size: 13,
-                                color: kIgBlue,
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Flexible(
+                                          child: Text(
+                                            group.isMine
+                                                ? "Your story"
+                                                : group.username,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              color: Color(0xFFFFFFFF),
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                        if (group.verified) ...[
+                                          const SizedBox(width: 4),
+                                          const Icon(
+                                            CupertinoIcons.checkmark_seal_fill,
+                                            size: 13,
+                                            color: kIgBlue,
+                                          ),
+                                        ],
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          timeAgoShort(slide.createdAt),
+                                          style: const TextStyle(
+                                            color: Color(0xCCFFFFFF),
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (slide.music != null)
+                                      Text(
+                                        "♫ ${slide.music!.label}",
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          color: Color(0xE6FFFFFF),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                  ],
+                                ),
                               ),
                             ],
-                            const SizedBox(width: 8),
-                            Text(
-                              timeAgoShort(slide.createdAt),
-                              style: const TextStyle(
-                                color: Color(0xCCFFFFFF),
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                      const Spacer(),
                       if (_holding)
                         const Padding(
                           padding: EdgeInsets.only(right: 4),
@@ -698,43 +773,43 @@ class _OwnFooter extends StatelessWidget {
 
   const _OwnFooter({required this.onActivity, required this.onMore});
 
+  Widget _item(IconData icon, String label, VoidCallback? onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(
+        width: 72,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: const Color(0xFFFFFFFF), size: 24),
+            const SizedBox(height: 3),
+            Text(
+              label,
+              maxLines: 1,
+              style: const TextStyle(
+                color: Color(0xFFFFFFFF),
+                fontSize: 11,
+                height: 1.1,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Fixed-size items: no button padding, so nothing overflows the 64 px
+    // footer on small or high-density screens.
     return Row(
       children: [
-        CupertinoButton(
-          onPressed: onActivity,
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(CupertinoIcons.eye, color: Color(0xFFFFFFFF), size: 22),
-              SizedBox(height: 2),
-              Text(
-                "Activity",
-                style: TextStyle(color: Color(0xFFFFFFFF), fontSize: 11),
-              ),
-            ],
-          ),
-        ),
+        const SizedBox(width: 6),
+        _item(CupertinoIcons.eye, "Activity", onActivity),
         const Spacer(),
-        CupertinoButton(
-          onPressed: onMore,
-          child: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                CupertinoIcons.ellipsis_circle,
-                color: Color(0xFFFFFFFF),
-                size: 22,
-              ),
-              SizedBox(height: 2),
-              Text(
-                "More",
-                style: TextStyle(color: Color(0xFFFFFFFF), fontSize: 11),
-              ),
-            ],
-          ),
-        ),
+        _item(CupertinoIcons.ellipsis_circle, "More", onMore),
+        const SizedBox(width: 6),
       ],
     );
   }

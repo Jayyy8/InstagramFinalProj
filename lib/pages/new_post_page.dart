@@ -8,6 +8,7 @@ import "package:image_picker/image_picker.dart";
 import "../providers/feed_provider.dart";
 import "../theme/app_theme.dart";
 import "../widgets/dialogs.dart";
+import "../widgets/post_video.dart";
 import "../widgets/sub_page.dart";
 
 /// New post: pick up to 10 photos, write a caption, add a location.
@@ -24,6 +25,9 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
   final TextEditingController _location = TextEditingController();
   final ImagePicker _picker = ImagePicker();
   final List<XFile> _photos = [];
+
+  /// A video post (instead of photos). Videos also show in Reels.
+  XFile? _video;
   int _selected = 0;
   bool _sharing = false;
 
@@ -50,6 +54,7 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
       );
       if (picked.isEmpty || !mounted) return;
       setState(() {
+        _video = null;
         _photos
           ..clear()
           ..addAll(picked.take(10));
@@ -69,6 +74,7 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
       );
       if (photo == null || !mounted) return;
       setState(() {
+        _video = null;
         if (_photos.length < 10) _photos.add(photo);
         _selected = _photos.length - 1;
       });
@@ -77,8 +83,46 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
     }
   }
 
+  void _pickVideo() {
+    Future<void> pick(ImageSource source) async {
+      try {
+        final video = await _picker.pickVideo(
+          source: source,
+          maxDuration: const Duration(seconds: 90),
+        );
+        if (video == null || !mounted) return;
+        setState(() {
+          _video = video;
+          _photos.clear();
+          _selected = 0;
+        });
+      } catch (e) {
+        if (mounted) showToast(context, errorText(e), error: true);
+      }
+    }
+
+    showActionSheet(
+      context,
+      title: "Add a video",
+      actions: [
+        SheetAction(
+          label: "Choose from library",
+          icon: CupertinoIcons.film,
+          onTap: () => pick(ImageSource.gallery),
+        ),
+        SheetAction(
+          label: "Record video",
+          icon: CupertinoIcons.videocam,
+          onTap: () => pick(ImageSource.camera),
+        ),
+      ],
+    );
+  }
+
+  bool get _hasMedia => _photos.isNotEmpty || _video != null;
+
   Future<void> _share() async {
-    if (_photos.isEmpty || _sharing) return;
+    if (!_hasMedia || _sharing) return;
     FocusManager.instance.primaryFocus?.unfocus();
     setState(() => _sharing = true);
     try {
@@ -88,6 +132,7 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
             photos: List.of(_photos),
             caption: _caption.text,
             location: _location.text,
+            video: _video,
           );
       if (!mounted) return;
       showToast(context, "Your post has been shared");
@@ -108,7 +153,7 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
       actions: [
         AdaptiveAppBarAction(
           title: _sharing ? "Sharing..." : "Share",
-          onPressed: _photos.isEmpty || _sharing ? () {} : _share,
+          onPressed: !_hasMedia || _sharing ? () {} : _share,
         ),
       ],
       child: Stack(
@@ -122,7 +167,13 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
                 // Selected photo.
                 AspectRatio(
                   aspectRatio: 4 / 5,
-                  child: _photos.isEmpty
+                  child: _video != null
+                      ? PostVideo(
+                          key: ValueKey(_video!.path),
+                          url: _video!.path,
+                          autoplay: true,
+                        )
+                      : _photos.isEmpty
                       ? GestureDetector(
                           onTap: _pickFromLibrary,
                           child: ColoredBox(
@@ -199,6 +250,11 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
                         label: "Camera",
                         onTap: _takePhoto,
                       ),
+                      _SquareButton(
+                        icon: CupertinoIcons.videocam,
+                        label: "Video",
+                        onTap: _pickVideo,
+                      ),
                     ],
                   ),
                 ),
@@ -265,7 +321,7 @@ class _NewPostPageState extends ConsumerState<NewPostPage> {
                       label: "Share",
                       color: kIgBlue,
                       size: AdaptiveButtonSize.large,
-                      enabled: _photos.isNotEmpty && !_sharing,
+                      enabled: _hasMedia && !_sharing,
                       minSize: const Size(double.infinity, 46),
                       onPressed: _share,
                     ),

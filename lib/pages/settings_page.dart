@@ -134,15 +134,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       (
         "Your app and media",
         [
-          // Android draws Material controls with the light theme, so the
-          // dark mode switch is offered on iPhone only.
-          if (PlatformInfo.isIOS)
-            _Row(
-              CupertinoIcons.moon,
-              "Dark mode",
-              value: appearance.label,
-              onTap: _chooseAppearance,
-            ),
+          _Row(
+            CupertinoIcons.moon,
+            "Dark mode",
+            value: appearance.label,
+            onTap: _chooseAppearance,
+          ),
           _Row(
             CupertinoIcons.device_phone_portrait,
             "Device",

@@ -198,6 +198,75 @@ List<FeedPost> buildSamplePosts() {
         FeedComment(author: "wild_lens", text: "Setting a reminder for this."),
       ],
     ),
+    ..._profileOnlyPosts(),
+  ];
+}
+
+/// Extra posts that only appear on each channel's profile grid (and in
+/// Explore), so sample profiles look full.
+List<FeedPost> _profileOnlyPosts() {
+  const captions = {
+    "hoops.daily": [
+      "Courtside view from last night.",
+      "Warm-ups before the big one.",
+      "Throwback to the finals run.",
+      "Practice makes perfect.",
+      "Road trip, game three.",
+      "Fans brought the energy tonight.",
+    ],
+    "matchday.live": [
+      "Matchday atmosphere.",
+      "Training ground session.",
+      "Tunnel cam before kickoff.",
+      "The away end was loud today.",
+      "Clean sheet celebrations.",
+      "New kit, who's buying?",
+    ],
+    "worldnews.now": [
+      "Morning briefing: the stories to watch.",
+      "Live from the city council session.",
+      "Weather desk: clear skies ahead.",
+      "Behind the scenes in the newsroom.",
+      "Markets open higher today.",
+      "Our reporters on the ground.",
+    ],
+    "planet.docs": [
+      "Into the wild, episode 4.",
+      "Golden hour on the plains.",
+      "Deep forest, early morning.",
+      "Above the clouds.",
+      "Coastline, filmed by drone.",
+      "Night sky over the desert.",
+    ],
+  };
+  const photoIds = {
+    "hoops.daily": [1058, 1059, 1060, 1062, 1063, 1064],
+    "matchday.live": [1070, 1071, 1072, 1073, 1076, 1077],
+    "worldnews.now": [1078, 1079, 1080, 1081, 1082, 1083],
+    "planet.docs": [1084, 1067, 1068, 1065, 1066, 1043],
+  };
+  const channels = {
+    "hoops.daily": (_hoops, FeedCategory.nba),
+    "matchday.live": (_match, FeedCategory.football),
+    "worldnews.now": (_news, FeedCategory.news),
+    "planet.docs": (_docs, FeedCategory.docs),
+  };
+
+  return [
+    for (final entry in channels.entries)
+      for (int i = 0; i < photoIds[entry.key]!.length; i++)
+        FeedPost(
+          id: "x_${entry.key}_$i",
+          category: entry.value.$2,
+          channel: entry.value.$1,
+          fallbackUrls: true,
+          imageUrls: _picsum(photoIds[entry.key]![i]),
+          caption: captions[entry.key]![i],
+          location: "",
+          timeAgoText: "${i + 1} weeks ago",
+          baseLikes: 4200 + i * 1375,
+          showInFeed: false,
+        ),
   ];
 }
 // ───────────── Notes ─────────────
@@ -238,6 +307,65 @@ final List<SampleNote> kSampleNotes = [
 List<String>? channelAvatar(String handle) {
   for (final topic in kStoryTopics) {
     if (topic.channel.handle == handle) return topic.photos.first;
+  }
+  return null;
+}
+
+// ───────────── Channel profiles ─────────────
+
+class ChannelInfo {
+  final String name;
+  final String category;
+  final String bio;
+  final int followers;
+  final int following;
+
+  const ChannelInfo({
+    required this.name,
+    required this.category,
+    required this.bio,
+    required this.followers,
+    required this.following,
+  });
+}
+
+const Map<String, ChannelInfo> kChannelInfo = {
+  "hoops.daily": ChannelInfo(
+    name: "Hoops Daily",
+    category: "Sports",
+    bio:
+        "Basketball news, highlights and game-day photos.\nNot affiliated with any league.",
+    followers: 2480000,
+    following: 312,
+  ),
+  "matchday.live": ChannelInfo(
+    name: "Matchday Live",
+    category: "Sports",
+    bio: "Every kickoff, every goal. Football from around the world.",
+    followers: 5120000,
+    following: 188,
+  ),
+  "worldnews.now": ChannelInfo(
+    name: "World News Now",
+    category: "News & media website",
+    bio:
+        "Breaking news and stories that matter. Live coverage every night at 9.",
+    followers: 8730000,
+    following: 95,
+  ),
+  "planet.docs": ChannelInfo(
+    name: "Planet Docs",
+    category: "Documentary",
+    bio: "Nature and science documentaries. New episode every Friday.",
+    followers: 3360000,
+    following: 41,
+  ),
+};
+
+/// Story topic of a sample channel (for its avatar ring), if any.
+StoryTopic? channelTopic(String handle) {
+  for (final topic in kStoryTopics) {
+    if (topic.channel.handle == handle) return topic;
   }
   return null;
 }

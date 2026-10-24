@@ -29,21 +29,28 @@ class ChatPage extends ConsumerStatefulWidget {
 class _ChatPageState extends ConsumerState<ChatPage> {
   final TextEditingController _controller = TextEditingController();
   final ImagePicker _picker = ImagePicker();
+  final FocusNode _focus = FocusNode();
+
+  /// Message being answered (swipe right or "Reply").
+  Message? _replyTo;
 
   @override
   void dispose() {
     _controller.dispose();
+    _focus.dispose();
     super.dispose();
   }
 
   Future<void> _send({XFile? photo}) async {
     final text = _controller.text;
     if (text.trim().isEmpty && photo == null) return;
+    final replyTo = _replyTo;
     _controller.clear();
+    setState(() => _replyTo = null);
     try {
       await ref
           .read(chatProvider(widget.partner.id).notifier)
-          .send(text: text, photo: photo);
+          .send(text: text, photo: photo, replyToId: replyTo?.id);
     } catch (e) {
       if (mounted) showToast(context, errorText(e), error: true);
     }
@@ -80,29 +87,131 @@ class _ChatPageState extends ConsumerState<ChatPage> {
     );
   }
 
+  ChatNotifier get _chat => ref.read(chatProvider(widget.partner.id).notifier);
+
+  void _guard(Future<void> action) {
+    action.catchError((Object e) {
+      if (mounted) showToast(context, errorText(e), error: true);
+    });
+  }
+
+  void _react(Message m, String emoji) {
+    if (m.pending) return;
+    _guard(_chat.react(m, emoji));
+  }
+
+  void _startReply(Message m) {
+    if (m.pending) return;
+    HapticFeedback.selectionClick();
+    setState(() => _replyTo = m);
+    _focus.requestFocus();
+  }
+
+  /// Hold a message: reactions on top, then Reply / Copy / Unsend / Delete.
   void _messageMenu(Message m, bool mine) {
-    showActionSheet(
+    if (m.pending) return;
+    HapticFeedback.mediumImpact();
+    final me = ref.read(currentUserIdProvider);
+    showIgSheet<void>(
       context,
-      actions: [
-        if (m.body.isNotEmpty)
-          SheetAction(
-            label: "Copy",
-            icon: CupertinoIcons.doc_on_doc,
-            onTap: () => Clipboard.setData(ClipboardData(text: m.body)),
-          ),
-        if (mine && !m.pending)
-          SheetAction(
-            label: "Unsend",
-            icon: CupertinoIcons.arrow_uturn_left,
-            destructive: true,
-            onTap: () => ref
-                .read(chatProvider(widget.partner.id).notifier)
-                .unsend(m)
-                .catchError((Object e) {
-                  if (mounted) showToast(context, errorText(e), error: true);
-                }),
-          ),
-      ],
+      builder: (sheetContext) {
+        final colors = AppColors.of(sheetContext);
+        void close() => Navigator.of(sheetContext).pop();
+
+        Widget action(
+          IconData icon,
+          String label,
+          VoidCallback onTap, {
+          bool destructive = false,
+        }) {
+          final color = destructive ? kIgRed : colors.text;
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () {
+              close();
+              onTap();
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              child: Row(
+                children: [
+                  Text(label, style: TextStyle(fontSize: 16, color: color)),
+                  const Spacer(),
+                  Icon(icon, color: color, size: 22),
+                ],
+              ),
+            ),
+          );
+        }
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Reaction bar.
+            Container(
+              margin: const EdgeInsets.fromLTRB(16, 4, 16, 10),
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              decoration: BoxDecoration(
+                color: colors.field,
+                borderRadius: BorderRadius.circular(30),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  for (final emoji in kReactions)
+                    GestureDetector(
+                      onTap: () {
+                        close();
+                        _react(m, emoji);
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: m.reactions[me] == emoji
+                              ? colors.button
+                              : const Color(0x00000000),
+                        ),
+                        child: Text(
+                          emoji,
+                          style: const TextStyle(fontSize: 28),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Container(height: 0.5, color: colors.separator),
+            action(CupertinoIcons.reply, "Reply", () => _startReply(m)),
+            if (m.body.isNotEmpty)
+              action(
+                CupertinoIcons.doc_on_doc,
+                "Copy",
+                () => Clipboard.setData(ClipboardData(text: m.body)),
+              ),
+            if (mine)
+              action(
+                CupertinoIcons.arrow_uturn_left,
+                "Unsend",
+                () => confirmAction(
+                  context,
+                  title: "Unsend message?",
+                  message: "It will be removed for everyone in the chat.",
+                  confirmLabel: "Unsend",
+                  onConfirm: () => _guard(_chat.unsend(m)),
+                ),
+                destructive: true,
+              ),
+            action(
+              CupertinoIcons.delete,
+              "Delete for you",
+              () => _guard(_chat.deleteForMe(m)),
+              destructive: true,
+            ),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
     );
   }
 
@@ -190,11 +299,58 @@ class _ChatPageState extends ConsumerState<ChatPage> {
                 partner: partner,
                 onLongPress: _messageMenu,
                 onOpenProfile: _openProfile,
+                onReply: _startReply,
+                onDoubleTap: (m) => _react(m, "\u2764\uFE0F"),
               ),
             ),
           ),
+          if (_replyTo != null)
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 8, 4, 0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _replyTo!.senderId == me
+                              ? "Replying to yourself"
+                              : "Replying to ${partner.displayName}",
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: colors.text,
+                          ),
+                        ),
+                        Text(
+                          _replyTo!.snippet,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: colors.secondaryText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  CupertinoButton(
+                    padding: const EdgeInsets.all(8),
+                    minimumSize: const Size(36, 36),
+                    onPressed: () => setState(() => _replyTo = null),
+                    child: Icon(
+                      CupertinoIcons.xmark,
+                      size: 18,
+                      color: colors.secondaryText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           MessageInputBar(
             controller: _controller,
+            focusNode: _focus,
             placeholder: "Message...",
             onSend: _send,
             onCamera: _pickPhoto,
@@ -211,6 +367,8 @@ class _MessageList extends StatelessWidget {
   final Profile partner;
   final void Function(Message, bool mine) onLongPress;
   final VoidCallback onOpenProfile;
+  final ValueChanged<Message> onReply;
+  final ValueChanged<Message> onDoubleTap;
 
   const _MessageList({
     required this.messages,
@@ -218,6 +376,8 @@ class _MessageList extends StatelessWidget {
     required this.partner,
     required this.onLongPress,
     required this.onOpenProfile,
+    required this.onReply,
+    required this.onDoubleTap,
   });
 
   @override
@@ -225,6 +385,7 @@ class _MessageList extends StatelessWidget {
     final colors = AppColors.of(context);
     final reversed = messages.reversed.toList();
     final lastMineIndex = reversed.indexWhere((m) => m.senderId == me);
+    final byId = {for (final m in messages) m.id: m};
 
     return ListView.builder(
       reverse: true,
@@ -301,30 +462,39 @@ class _MessageList extends StatelessWidget {
                   ),
                 ),
               ),
-            GestureDetector(
-              onLongPress: () => onLongPress(m, mine),
-              child: Row(
-                mainAxisAlignment: mine
-                    ? MainAxisAlignment.end
-                    : MainAxisAlignment.start,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  if (!mine)
-                    SizedBox(
-                      width: 34,
-                      child: lastOfGroup
-                          ? GradientAvatar(
-                              name: partner.username,
-                              imageUrls: partner.avatarUrls,
-                              size: 28,
-                              ring: false,
-                            )
-                          : null,
+            _SwipeToReply(
+              onReply: () => onReply(m),
+              child: GestureDetector(
+                onLongPress: () => onLongPress(m, mine),
+                onDoubleTap: () => onDoubleTap(m),
+                child: Row(
+                  mainAxisAlignment: mine
+                      ? MainAxisAlignment.end
+                      : MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    if (!mine)
+                      SizedBox(
+                        width: 34,
+                        child: lastOfGroup
+                            ? GradientAvatar(
+                                name: partner.username,
+                                imageUrls: partner.avatarUrls,
+                                size: 28,
+                                ring: false,
+                              )
+                            : null,
+                      ),
+                    Flexible(
+                      child: _Bubble(
+                        message: m,
+                        mine: mine,
+                        quoted: m.replyToId == null ? null : byId[m.replyToId],
+                        quotedMine: byId[m.replyToId]?.senderId == me,
+                      ),
                     ),
-                  Flexible(
-                    child: _Bubble(message: m, mine: mine),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             if (mine && i == lastMineIndex)
@@ -368,11 +538,75 @@ class _MessageList extends StatelessWidget {
   }
 }
 
+/// Emojis offered when you hold a message.
+const List<String> kReactions = [
+  "\u2764\uFE0F",
+  "\u{1F602}",
+  "\u{1F62E}",
+  "\u{1F622}",
+  "\u{1F621}",
+  "\u{1F44D}",
+];
+
+/// Drag a message to the right to reply to it.
+class _SwipeToReply extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onReply;
+
+  const _SwipeToReply({required this.child, required this.onReply});
+
+  @override
+  State<_SwipeToReply> createState() => _SwipeToReplyState();
+}
+
+class _SwipeToReplyState extends State<_SwipeToReply> {
+  double _dx = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onHorizontalDragUpdate: (d) =>
+          setState(() => _dx = (_dx + d.delta.dx).clamp(0, 80)),
+      onHorizontalDragEnd: (_) {
+        if (_dx > 56) widget.onReply();
+        setState(() => _dx = 0);
+      },
+      onHorizontalDragCancel: () => setState(() => _dx = 0),
+      child: Stack(
+        alignment: Alignment.centerLeft,
+        children: [
+          if (_dx > 8)
+            Opacity(
+              opacity: (_dx / 56).clamp(0, 1),
+              child: Icon(
+                CupertinoIcons.reply,
+                size: 20,
+                color: AppColors.of(context).secondaryText,
+              ),
+            ),
+          AnimatedContainer(
+            duration: Duration(milliseconds: _dx == 0 ? 180 : 0),
+            transform: Matrix4.translationValues(_dx, 0, 0),
+            child: widget.child,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Bubble extends StatelessWidget {
   final Message message;
   final bool mine;
+  final Message? quoted;
+  final bool quotedMine;
 
-  const _Bubble({required this.message, required this.mine});
+  const _Bubble({
+    required this.message,
+    required this.mine,
+    this.quoted,
+    this.quotedMine = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -382,6 +616,38 @@ class _Bubble extends StatelessWidget {
     final textColor = mine ? const Color(0xFFFFFFFF) : colors.text;
 
     final children = <Widget>[];
+
+    // The message this one replies to.
+    if (m.replyToId != null) {
+      children.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 2, left: 4, right: 4),
+          child: Text(
+            mine
+                ? (quotedMine ? "You replied to yourself" : "You replied")
+                : (quotedMine ? "Replied to you" : "Replied"),
+            style: TextStyle(fontSize: 11, color: colors.secondaryText),
+          ),
+        ),
+      );
+      children.add(
+        Container(
+          constraints: BoxConstraints(maxWidth: maxWidth * 0.9),
+          margin: const EdgeInsets.only(bottom: 2),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: colors.theirBubble.withValues(alpha: 0.6),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            quoted?.snippet ?? "Message unavailable",
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 13, color: colors.secondaryText),
+          ),
+        ),
+      );
+    }
 
     // What this message replies to / shares.
     if (m.contextType == "story_reply" || m.contextType == "note_reply") {
@@ -507,6 +773,35 @@ class _Bubble extends StatelessWidget {
                   style: TextStyle(fontSize: 15, color: textColor),
                 ),
               ),
+      );
+    }
+
+    // Reactions under the bubble.
+    if (m.reactions.isNotEmpty) {
+      final counts = <String, int>{};
+      for (final e in m.reactions.values) {
+        counts[e] = (counts[e] ?? 0) + 1;
+      }
+      children.add(
+        Transform.translate(
+          offset: const Offset(0, -4),
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: colors.field,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.background, width: 2),
+            ),
+            child: Text(
+              [
+                for (final e in counts.entries)
+                  e.value > 1 ? "${e.key} ${e.value}" : e.key,
+              ].join(" "),
+              style: const TextStyle(fontSize: 13),
+            ),
+          ),
+        ),
       );
     }
 

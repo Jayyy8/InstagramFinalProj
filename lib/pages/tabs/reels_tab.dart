@@ -12,14 +12,27 @@ import "../../widgets/feed_image.dart";
 import "../../widgets/follow_button.dart";
 import "../../widgets/gradient_avatar.dart";
 import "../../widgets/post_actions.dart";
+import "../../widgets/post_video.dart";
+import "../channel_profile_page.dart";
 
-/// Full-screen vertical pager over the feed posts.
-class ReelsTab extends ConsumerWidget {
-  const ReelsTab({super.key});
+/// Full-screen vertical pager: video posts of people you follow, then the
+/// sample channels. Real photo posts are not shown here.
+class ReelsTab extends ConsumerStatefulWidget {
+  /// The Reels tab is the one on screen (videos only play then).
+  final bool active;
+
+  const ReelsTab({super.key, this.active = true});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final posts = ref.watch(feedProvider);
+  ConsumerState<ReelsTab> createState() => _ReelsTabState();
+}
+
+class _ReelsTabState extends ConsumerState<ReelsTab> {
+  int _page = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final posts = ref.watch(reelsProvider);
 
     if (posts.isEmpty) {
       return const Center(child: Text("Nothing to show yet."));
@@ -30,8 +43,12 @@ class ReelsTab extends ConsumerWidget {
       child: PageView.builder(
         scrollDirection: Axis.vertical,
         itemCount: posts.length,
-        itemBuilder: (context, index) =>
-            _ReelPage(key: ValueKey(posts[index].id), post: posts[index]),
+        onPageChanged: (i) => setState(() => _page = i),
+        itemBuilder: (context, index) => _ReelPage(
+          key: ValueKey(posts[index].id),
+          post: posts[index],
+          playing: widget.active && index == _page,
+        ),
       ),
     );
   }
@@ -39,8 +56,9 @@ class ReelsTab extends ConsumerWidget {
 
 class _ReelPage extends ConsumerStatefulWidget {
   final FeedPost post;
+  final bool playing;
 
-  const _ReelPage({super.key, required this.post});
+  const _ReelPage({super.key, required this.post, required this.playing});
 
   @override
   ConsumerState<_ReelPage> createState() => _ReelPageState();
@@ -106,13 +124,18 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          FeedImage(urls: post.cover),
-          const DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.center,
-                end: Alignment.bottomCenter,
-                colors: [Color(0x00000000), Color(0xB3000000)],
+          if (post.isVideo)
+            PostVideo(url: post.imageUrls.first, autoplay: widget.playing)
+          else
+            FeedImage(urls: post.cover),
+          const IgnorePointer(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.center,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0x00000000), Color(0xB3000000)],
+                ),
               ),
             ),
           ),
@@ -177,9 +200,9 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
                 Row(
                   children: [
                     GestureDetector(
-                      onTap: post.author == null
-                          ? null
-                          : () => openProfile(context, post.author!),
+                      onTap: () => post.author == null
+                          ? openChannel(context, post.authorName)
+                          : openProfile(context, post.author!),
                       child: GradientAvatar(
                         name: post.authorName,
                         imageUrls: post.remote

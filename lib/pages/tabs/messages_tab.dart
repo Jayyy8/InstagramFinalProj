@@ -169,6 +169,13 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
   }
 }
 
+/// Note text, with the song underneath when the note has one.
+String _bubbleText(Note n) {
+  final music = n.music;
+  if (music == null || n.body.startsWith("\u266B")) return n.body;
+  return "${n.body}\n\u266B ${music.title}";
+}
+
 class _NotesRow extends ConsumerWidget {
   const _NotesRow();
 
@@ -238,15 +245,19 @@ class _NotesRow extends ConsumerWidget {
           item(
             label: "Your note",
             avatar: me?.avatarUrls,
-            bubble: mine?.body ?? "Share a thought...",
+            bubble: mine == null ? "Share a thought..." : _bubbleText(mine),
             placeholder: mine == null,
+            caption: mine?.location == null
+                ? "Location off"
+                : "\u{1F4CD} ${mine!.location}",
             onTap: () => showNoteComposer(context),
           ),
           for (final n in others)
             item(
               label: n.username,
               avatar: n.avatarUrls,
-              bubble: n.body,
+              bubble: _bubbleText(n),
+              caption: n.location == null ? null : "\u{1F4CD} ${n.location}",
               onTap: () => showNoteViewer(context, n),
             ),
         ],

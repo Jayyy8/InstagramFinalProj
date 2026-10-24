@@ -123,6 +123,11 @@ class SocialRepository {
     return Profile.fromMap(row);
   }
 
+  /// Notifications opened: activity before now is no longer "new".
+  Future<void> markActivitySeen() async {
+    await _db.from("profiles").update({"activity_seen_at": _now}).eq("id", me);
+  }
+
   Future<void> touchLastActive() async {
     await _db.from("profiles").update({"last_active_at": _now}).eq("id", me);
   }
@@ -291,6 +296,7 @@ class SocialRepository {
               liked: liked,
               saved: saved.contains(id),
               commentCount: commentCount[id] ?? 0,
+              isVideo: r["media_type"] == "video",
             );
           }(),
     ];
@@ -361,14 +367,21 @@ class SocialRepository {
     return list;
   }
 
+  /// [photos] are uploaded in order. A post with [video] has that one
+  /// video instead of photos.
   Future<FeedPost> createPost({
     required List<XFile> photos,
     required String caption,
     required String location,
+    XFile? video,
   }) async {
     final urls = <String>[];
-    for (final photo in photos) {
-      urls.add(await upload("posts", photo));
+    if (video != null) {
+      urls.add(await upload("posts", video));
+    } else {
+      for (final photo in photos) {
+        urls.add(await upload("posts", photo));
+      }
     }
     final row = await _db
         .from("posts")
@@ -378,6 +391,7 @@ class SocialRepository {
           "location": location.trim(),
           "image_url": urls.first,
           "image_urls": urls,
+          if (video != null) "media_type": "video",
         })
         .select(_postColumns)
         .single();
@@ -390,11 +404,13 @@ class SocialRepository {
 
   Future<void> setLike(String postId, bool like) async {
     if (like) {
-      await _db.from("likes").upsert(
-        {"post_id": postId, "user_id": me},
-        onConflict: "post_id,user_id",
-        ignoreDuplicates: true,
-      );
+      await _db
+          .from("likes")
+          .upsert(
+            {"post_id": postId, "user_id": me},
+            onConflict: "post_id,user_id",
+            ignoreDuplicates: true,
+          );
     } else {
       await _db.from("likes").delete().eq("post_id", postId).eq("user_id", me);
     }
@@ -511,6 +527,8 @@ class SocialRepository {
     required bool video,
     required List<StoryOverlay> overlays,
     required int durationMs,
+    String? location,
+    Music? music,
   }) async {
     final url = await upload("stories", file);
     await _db.from("stories").insert({
@@ -519,6 +537,8 @@ class SocialRepository {
       "media_type": video ? "video" : "image",
       "overlays": [for (final o in overlays) o.toMap()],
       "duration_ms": durationMs,
+      "location": ?location,
+      "music": ?music?.toJson(),
     });
   }
 
@@ -619,17 +639,25 @@ class SocialRepository {
               profile: author,
               likedByMe: mine.any((l) => l["user_id"] == myId),
               likeCount: mine.length,
+              location: r["location"] as String?,
+              music: Music.fromJson(r["music"]),
             );
           }(),
     ];
   }
 
   /// Replaces your note (likes on the old one are removed with it).
-  Future<void> setNote(String text) async {
+  Future<void> setNote(String text, {String? location, Music? music}) async {
+    // A note with only a song shows the song as its text.
+    var content = text.trim();
+    if (content.isEmpty && music != null) content = "♫ ${music.label}";
+    if (content.length > 60) content = content.substring(0, 60);
     await _db.from("notes").delete().eq("user_id", me);
     await _db.from("notes").insert({
       "user_id": me,
-      "content": text.trim(),
+      "content": content,
+      "location": ?location,
+      "music": ?music?.toJson(),
       "expires_at": DateTime.now()
           .add(const Duration(hours: 24))
           .toUtc()
@@ -670,6 +698,7 @@ class SocialRepository {
     final last = <String, Message>{};
     final unread = <String, int>{};
     for (final r in rows) {
+      if ((r["deleted_for"] as List?)?.contains(myId) ?? false) continue;
       final m = Message.fromMap(r);
       final partner = m.senderId == myId ? m.receiverId : m.senderId;
       last.putIfAbsent(partner, () => m);
@@ -709,7 +738,65 @@ class SocialRepository {
         )
         .order("created_at")
         .limit(500);
-    return [for (final r in rows) Message.fromMap(r)];
+    final reactions = await reactionsFor([
+      for (final r in rows) r["id"] as String,
+    ]);
+    return [
+      for (final r in rows)
+        if (!((r["deleted_for"] as List?)?.contains(myId) ?? false))
+          Message.fromMap(r, reactions: reactions[r["id"]] ?? const {}),
+    ];
+  }
+
+  /// Reactions per message id: {message id: {user id: emoji}}.
+  Future<Map<String, Map<String, String>>> reactionsFor(
+    List<String> messageIds,
+  ) async {
+    if (messageIds.isEmpty) return {};
+    try {
+      final rows = await _db
+          .from("message_reactions")
+          .select("message_id, user_id, emoji")
+          .inFilter("message_id", messageIds);
+      final out = <String, Map<String, String>>{};
+      for (final r in rows) {
+        out.putIfAbsent(
+          r["message_id"] as String,
+          () => {},
+        )[r["user_id"] as String] = r["emoji"] as String;
+      }
+      return out;
+    } catch (_) {
+      // message_reactions is created by schema.sql.
+      return {};
+    }
+  }
+
+  /// Sets your reaction ([emoji] null removes it).
+  Future<void> react(String messageId, String? emoji) async {
+    if (emoji == null) {
+      await _db
+          .from("message_reactions")
+          .delete()
+          .eq("message_id", messageId)
+          .eq("user_id", me);
+    } else {
+      await _db.from("message_reactions").upsert({
+        "message_id": messageId,
+        "user_id": me,
+        "emoji": emoji,
+      }, onConflict: "message_id,user_id");
+    }
+  }
+
+  /// "Delete for you": hides the message for you only.
+  Future<void> deleteForMe(Message message) async {
+    await _db
+        .from("messages")
+        .update({
+          "deleted_for": [...message.deletedFor, me],
+        })
+        .eq("id", message.id);
   }
 
   Future<Message> sendMessage({
@@ -719,6 +806,7 @@ class SocialRepository {
     String? contextType,
     String? contextText,
     String? contextMediaUrl,
+    String? replyToId,
   }) async {
     final mediaUrl = photo == null ? null : await upload("chat", photo);
     final row = await _db
@@ -731,6 +819,7 @@ class SocialRepository {
           "context_type": ?contextType,
           "context_text": ?contextText,
           "context_media_url": ?contextMediaUrl,
+          "reply_to_id": ?replyToId,
         })
         .select()
         .single();

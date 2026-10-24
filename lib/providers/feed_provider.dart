@@ -121,7 +121,31 @@ final feedProvider = Provider<List<FeedPost>>((ref) {
   return [
     for (final id in ids)
       if (cache[id] != null) cache[id]!,
-    ...samples,
+    ...samples.where((p) => p.showInFeed),
+  ];
+});
+
+/// Reels: video posts from you and the people you follow, then the sample
+/// channels. Photo posts of real accounts stay in the feed only.
+final reelsProvider = Provider<List<FeedPost>>((ref) {
+  final ids = ref.watch(homeFeedProvider).valueOrNull ?? const [];
+  final cache = ref.watch(postCacheProvider);
+  final samples = ref.watch(samplePostsProvider);
+  return [
+    for (final id in ids)
+      if (cache[id] != null && cache[id]!.isVideo) cache[id]!,
+    ...samples.where((p) => p.showInFeed),
+  ];
+});
+
+/// Posts of a sample channel, for its profile grid.
+final channelPostsProvider = Provider.family<List<FeedPost>, String>((
+  ref,
+  handle,
+) {
+  return [
+    for (final p in ref.watch(samplePostsProvider))
+      if (p.channel?.handle == handle) p,
   ];
 });
 
@@ -256,11 +280,13 @@ class PostActions {
     required List<XFile> photos,
     required String caption,
     required String location,
+    XFile? video,
   }) async {
     final post = await _repo.createPost(
       photos: photos,
       caption: caption,
       location: location,
+      video: video,
     );
     _ref.read(homeFeedProvider.notifier).prepend(post);
     _ref.invalidate(userPostIdsProvider(post.author!.id));

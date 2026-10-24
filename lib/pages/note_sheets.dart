@@ -6,9 +6,11 @@ import "../models/social_models.dart";
 import "../providers/chat_provider.dart";
 import "../providers/notes_provider.dart";
 import "../providers/social_providers.dart";
+import "../services/music_service.dart";
 import "../theme/app_theme.dart";
 import "../widgets/dialogs.dart";
 import "../widgets/gradient_avatar.dart";
+import "../widgets/music_picker.dart";
 
 /// Speech bubble drawn above an avatar (notes).
 class NoteBubble extends StatelessWidget {
@@ -95,26 +97,50 @@ class _NoteComposer extends ConsumerStatefulWidget {
 class _NoteComposerState extends ConsumerState<_NoteComposer> {
   late final TextEditingController _text;
   bool _saving = false;
+  Music? _music;
+  String? _location;
+  final PreviewPlayer _preview = PreviewPlayer();
 
   @override
   void initState() {
     super.initState();
-    _text = TextEditingController(text: ref.read(myNoteProvider)?.body ?? "");
+    final existing = ref.read(myNoteProvider);
+    _music = existing?.music;
+    _location = existing?.location;
+    // A song-only note stores the song as its text; start empty then.
+    final body = existing?.body ?? "";
+    _text = TextEditingController(text: body.startsWith("\u266B ") ? "" : body);
     _text.addListener(() => setState(() {}));
   }
 
   @override
   void dispose() {
+    _preview.stop();
     _text.dispose();
     super.dispose();
   }
 
+  Future<void> _pickMusic() async {
+    final music = await showMusicPicker(context);
+    if (music == null || !mounted) return;
+    setState(() => _music = music);
+    await _preview.play(music.previewUrl);
+  }
+
+  Future<void> _pickLocation() async {
+    final place = await askLocation(context, current: _location);
+    if (place == null || !mounted) return;
+    setState(() => _location = place.isEmpty ? null : place);
+  }
+
   Future<void> _share() async {
     final text = _text.text.trim();
-    if (text.isEmpty || _saving) return;
+    if ((text.isEmpty && _music == null) || _saving) return;
     setState(() => _saving = true);
     try {
-      await ref.read(notesProvider.notifier).setNote(text);
+      await ref
+          .read(notesProvider.notifier)
+          .setNote(text, location: _location, music: _music);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -142,7 +168,8 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
     final colors = AppColors.of(context);
     final me = ref.watch(myProfileProvider).valueOrNull;
     final existing = ref.watch(myNoteProvider);
-    final canShare = _text.text.trim().isNotEmpty && !_saving;
+    final canShare =
+        (_text.text.trim().isNotEmpty || _music != null) && !_saving;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
@@ -202,6 +229,17 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
               onSubmitted: (_) => _share(),
             ),
           ),
+          if (_music != null) ...[
+            const SizedBox(height: 8),
+            MusicChip(
+              music: _music!,
+              onDark: false,
+              onTap: () {
+                _preview.stop();
+                setState(() => _music = null);
+              },
+            ),
+          ],
           const SizedBox(height: 6),
           GradientAvatar(
             name: me?.username ?? "",
@@ -209,6 +247,33 @@ class _NoteComposerState extends ConsumerState<_NoteComposer> {
             size: 84,
             ring: false,
           ),
+          const SizedBox(height: 12),
+          // Song, location (like the icons under Instagram's note composer).
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _ComposerTool(
+                icon: CupertinoIcons.music_note_2,
+                color: const Color(0xFFD62976),
+                active: _music != null,
+                onTap: _pickMusic,
+              ),
+              const SizedBox(width: 12),
+              _ComposerTool(
+                icon: CupertinoIcons.location_solid,
+                color: const Color(0xFF4F5BD5),
+                active: _location != null,
+                onTap: _pickLocation,
+              ),
+            ],
+          ),
+          if (_location != null) ...[
+            const SizedBox(height: 6),
+            Text(
+              "\u{1F4CD} $_location",
+              style: TextStyle(fontSize: 13, color: colors.secondaryText),
+            ),
+          ],
           const SizedBox(height: 10),
           Text(
             "${_text.text.characters.length}/60 · Shared with followers you follow back for 24 hours",
@@ -250,9 +315,18 @@ class _NoteViewerState extends ConsumerState<_NoteViewer> {
   final TextEditingController _reply = TextEditingController();
   late bool _liked = widget.note.likedByMe;
   bool _sending = false;
+  final PreviewPlayer _preview = PreviewPlayer();
+
+  @override
+  void initState() {
+    super.initState();
+    final music = widget.note.music;
+    if (music != null) _preview.play(music.previewUrl);
+  }
 
   @override
   void dispose() {
+    _preview.stop();
     _reply.dispose();
     super.dispose();
   }
@@ -331,6 +405,17 @@ class _NoteViewerState extends ConsumerState<_NoteViewer> {
               ),
             ],
           ),
+          if (note.music != null) ...[
+            const SizedBox(height: 12),
+            MusicChip(music: note.music!, onDark: false),
+          ],
+          if (note.location != null && note.location!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              "\u{1F4CD} ${note.location}",
+              style: TextStyle(fontSize: 13, color: colors.secondaryText),
+            ),
+          ],
           const SizedBox(height: 22),
           Row(
             children: [
@@ -379,6 +464,37 @@ class _NoteViewerState extends ConsumerState<_NoteViewer> {
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ComposerTool extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _ComposerTool({
+    required this.icon,
+    required this.color,
+    required this.active,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40,
+        height: 32,
+        decoration: BoxDecoration(
+          color: active ? color.withValues(alpha: 0.18) : null,
+          border: Border.all(color: color.withValues(alpha: 0.6)),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, size: 18, color: color),
       ),
     );
   }

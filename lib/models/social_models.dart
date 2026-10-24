@@ -16,6 +16,9 @@ class Profile {
   final bool isPrivate;
   final DateTime? lastActiveAt;
 
+  /// When you last opened Notifications (newer activity shows a badge).
+  final DateTime? activitySeenAt;
+
   const Profile({
     required this.id,
     required this.username,
@@ -24,6 +27,7 @@ class Profile {
     this.avatarUrl,
     this.isPrivate = false,
     this.lastActiveAt,
+    this.activitySeenAt,
   });
 
   factory Profile.fromMap(Map<String, dynamic> map) => Profile(
@@ -34,6 +38,7 @@ class Profile {
     avatarUrl: map["avatar_url"] as String?,
     isPrivate: (map["is_private"] ?? false) as bool,
     lastActiveAt: _dateOrNull(map["last_active_at"]),
+    activitySeenAt: _dateOrNull(map["activity_seen_at"]),
   );
 
   /// Name shown under the avatar: full name, or the username.
@@ -56,6 +61,7 @@ class Profile {
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isPrivate: isPrivate ?? this.isPrivate,
       lastActiveAt: lastActiveAt,
+      activitySeenAt: activitySeenAt,
     );
   }
 }
@@ -104,6 +110,43 @@ class StoryOverlay {
   }
 }
 
+/// A song attached to a story or note (30-second preview from iTunes).
+class Music {
+  final String title;
+  final String artist;
+  final String previewUrl;
+  final String? artworkUrl;
+
+  const Music({
+    required this.title,
+    required this.artist,
+    required this.previewUrl,
+    this.artworkUrl,
+  });
+
+  static Music? fromJson(Object? value) {
+    if (value is! Map) return null;
+    final url = value["preview_url"] as String?;
+    if (url == null) return null;
+    return Music(
+      title: (value["title"] ?? "") as String,
+      artist: (value["artist"] ?? "") as String,
+      previewUrl: url,
+      artworkUrl: value["artwork_url"] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    "title": title,
+    "artist": artist,
+    "preview_url": previewUrl,
+    "artwork_url": artworkUrl,
+  };
+
+  /// "Title · Artist"
+  String get label => artist.isEmpty ? title : "$title · $artist";
+}
+
 /// One photo or video inside a story.
 class StorySlide {
   final String id;
@@ -114,6 +157,8 @@ class StorySlide {
   final List<StoryOverlay> overlays;
   final int durationMs;
   final DateTime createdAt;
+  final String? location;
+  final Music? music;
 
   /// True when the slide is stored in Supabase (it can be viewed, liked,
   /// replied to and deleted for real).
@@ -127,6 +172,8 @@ class StorySlide {
     this.overlays = const [],
     this.durationMs = 5000,
     this.remote = false,
+    this.location,
+    this.music,
   });
 
   bool get isVideo => videoUrl != null;
@@ -149,6 +196,8 @@ class StorySlide {
       durationMs: (map["duration_ms"] as num?)?.toInt() ?? 5000,
       createdAt: _date(map["created_at"]),
       remote: true,
+      location: map["location"] as String?,
+      music: Music.fromJson(map["music"]),
     );
   }
 }
@@ -187,6 +236,8 @@ class Note {
   final Profile? profile;
   final bool likedByMe;
   final int likeCount;
+  final String? location;
+  final Music? music;
 
   const Note({
     required this.id,
@@ -197,6 +248,8 @@ class Note {
     this.profile,
     this.likedByMe = false,
     this.likeCount = 0,
+    this.location,
+    this.music,
   });
 
   bool get remote => profile != null;
@@ -211,6 +264,8 @@ class Note {
       profile: profile,
       likedByMe: likedByMe ?? this.likedByMe,
       likeCount: likeCount ?? this.likeCount,
+      location: location,
+      music: music,
     );
   }
 }
@@ -227,6 +282,15 @@ class Message {
   final DateTime createdAt;
   final DateTime? readAt;
 
+  /// The message this one answers (swipe to reply).
+  final String? replyToId;
+
+  /// Reactions by user id ("❤️", "😂", ...).
+  final Map<String, String> reactions;
+
+  /// People who deleted this message for themselves.
+  final List<String> deletedFor;
+
   /// True while the message is still being sent.
   final bool pending;
 
@@ -241,10 +305,35 @@ class Message {
     this.contextText,
     this.contextMediaUrl,
     this.readAt,
+    this.replyToId,
+    this.reactions = const {},
+    this.deletedFor = const [],
     this.pending = false,
   });
 
-  factory Message.fromMap(Map<String, dynamic> map) => Message(
+  Message copyWith({DateTime? readAt, Map<String, String>? reactions}) {
+    return Message(
+      id: id,
+      senderId: senderId,
+      receiverId: receiverId,
+      body: body,
+      createdAt: createdAt,
+      mediaUrl: mediaUrl,
+      contextType: contextType,
+      contextText: contextText,
+      contextMediaUrl: contextMediaUrl,
+      readAt: readAt ?? this.readAt,
+      replyToId: replyToId,
+      reactions: reactions ?? this.reactions,
+      deletedFor: deletedFor,
+      pending: pending,
+    );
+  }
+
+  factory Message.fromMap(
+    Map<String, dynamic> map, {
+    Map<String, String> reactions = const {},
+  }) => Message(
     id: map["id"] as String,
     senderId: map["sender_id"] as String,
     receiverId: map["receiver_id"] as String,
@@ -255,7 +344,20 @@ class Message {
     contextMediaUrl: map["context_media_url"] as String?,
     createdAt: _date(map["created_at"]),
     readAt: _dateOrNull(map["read_at"]),
+    replyToId: map["reply_to_id"] as String?,
+    reactions: reactions,
+    deletedFor: [
+      for (final id in (map["deleted_for"] as List?) ?? const []) id as String,
+    ],
   );
+
+  /// Short text used when quoting this message in a reply.
+  String get snippet {
+    if (body.isNotEmpty) return body;
+    if (mediaUrl != null) return "Photo";
+    if (contextType == "post_share") return "Post";
+    return "Message";
+  }
 
   /// Short text for the inbox row.
   String preview({required bool mine}) {

@@ -8,10 +8,12 @@ import "package:video_player/video_player.dart";
 import "../models/social_models.dart";
 import "../providers/social_providers.dart";
 import "../providers/story_provider.dart";
+import "../services/music_service.dart";
 import "../services/social_repository.dart";
 import "../theme/app_theme.dart";
 import "../widgets/dialogs.dart";
 import "../widgets/gradient_avatar.dart";
+import "../widgets/music_picker.dart";
 import "story_viewer_page.dart";
 
 /// "Add to story": choose where the photo or video comes from.
@@ -218,6 +220,9 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
   int? _editing;
   int _color = _textColors.first;
   bool _uploading = false;
+  Music? _music;
+  String? _location;
+  final PreviewPlayer _preview = PreviewPlayer();
 
   @override
   void initState() {
@@ -238,6 +243,7 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
   @override
   void dispose() {
     _video?.dispose();
+    _preview.stop();
     _text.dispose();
     super.dispose();
   }
@@ -272,15 +278,55 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
     });
   }
 
+  Future<void> _pickMusic() async {
+    final music = await showMusicPicker(context);
+    if (music == null || !mounted) return;
+    setState(() => _music = music);
+    _video?.setVolume(0);
+    await _preview.play(music.previewUrl);
+  }
+
+  void _musicMenu() {
+    showActionSheet(
+      context,
+      title: _music?.label,
+      actions: [
+        SheetAction(
+          label: "Change song",
+          icon: CupertinoIcons.music_note,
+          onTap: _pickMusic,
+        ),
+        SheetAction(
+          label: "Remove song",
+          icon: CupertinoIcons.delete,
+          destructive: true,
+          onTap: () {
+            _preview.stop();
+            _video?.setVolume(1);
+            setState(() => _music = null);
+          },
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickLocation() async {
+    final place = await askLocation(context, current: _location);
+    if (place == null || !mounted) return;
+    setState(() => _location = place.isEmpty ? null : place);
+  }
+
   Future<void> _share() async {
     if (_uploading) return;
     setState(() => _uploading = true);
     _video?.pause();
+    _preview.pause();
     try {
       final length = _video?.value.duration ?? Duration.zero;
+      // Photo stories with a song play for 15 seconds, like Instagram.
       final duration = widget.video
           ? length.inMilliseconds.clamp(1000, 60000)
-          : 5000;
+          : (_music != null ? 15000 : 5000);
       await ref
           .read(storiesProvider.notifier)
           .add(
@@ -288,6 +334,8 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
             video: widget.video,
             overlays: _overlays,
             durationMs: duration,
+            location: _location,
+            music: _music,
           );
       if (!mounted) return;
       showToast(context, "Your story was shared");
@@ -296,6 +344,7 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
       if (!mounted) return;
       setState(() => _uploading = false);
       _video?.play();
+      _preview.resume();
       showInfo(context, title: "Couldn't share story", message: errorText(e));
     }
   }
@@ -371,6 +420,27 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
                             ),
                           ),
                         ),
+                    if (_location != null)
+                      Positioned(
+                        top: box.maxHeight * 0.16,
+                        left: 24,
+                        right: 24,
+                        child: Center(
+                          child: LocationChip(
+                            location: _location!,
+                            onTap: _pickLocation,
+                          ),
+                        ),
+                      ),
+                    if (_music != null)
+                      Positioned(
+                        top: box.maxHeight * 0.7,
+                        left: 24,
+                        right: 24,
+                        child: Center(
+                          child: MusicChip(music: _music!, onTap: _musicMenu),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -393,10 +463,13 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
                   _RoundTool(label: "Aa", onTap: _startText),
                   const SizedBox(width: 8),
                   _RoundTool(
-                    icon: CupertinoIcons.textformat_alt,
-                    onTap: _overlays.isEmpty
-                        ? _startText
-                        : () => _startText(_overlays.length - 1),
+                    icon: CupertinoIcons.music_note_2,
+                    onTap: _music == null ? _pickMusic : _musicMenu,
+                  ),
+                  const SizedBox(width: 8),
+                  _RoundTool(
+                    icon: CupertinoIcons.location_solid,
+                    onTap: _pickLocation,
                   ),
                 ],
               ),

@@ -2,10 +2,11 @@ import "package:adaptive_platform_ui/adaptive_platform_ui.dart";
 import "package:flutter/cupertino.dart";
 
 import "../theme/app_theme.dart";
+import "android_bars.dart";
 
 /// Pushed page with the platform's own top bar and back button:
 /// Liquid Glass toolbar on iOS 26+, Cupertino bar on older iPhones,
-/// Material app bar on Android.
+/// Instagram's flat Android bar on Android.
 class SubPage extends StatelessWidget {
   final String title;
   final Widget child;
@@ -28,12 +29,21 @@ class SubPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AdaptiveScaffold(
+      backgroundColor: AppColors.of(context).background,
       appBar: AdaptiveAppBar(
         title: title,
         titleWidget: titleWidget,
         actions: actions,
+        appBar: IgTopBar.from(
+          context,
+          title: title,
+          titleWidget: titleWidget,
+          actions: actions,
+        ),
       ),
-      body: SafeArea(bottom: safeBottom, child: child),
+      body: PageColors(
+        child: SafeArea(bottom: safeBottom, child: child),
+      ),
     );
   }
 }
@@ -45,11 +55,17 @@ AdaptiveAppBarAction barAction(
   AppIcon icon, {
   required String label,
   required VoidCallback onPressed,
+  int badge = 0,
 }) {
   return AdaptiveAppBarAction(
     iosSymbol: icon.sf,
     icon: icon.glyph,
-    iconWidget: Icon(icon.glyph, size: 26, color: AppColors.of(context).text),
+    iconWidget: Badged(
+      count: badge,
+      child: Icon(icon.glyph, size: 26, color: AppColors.of(context).text),
+    ),
+    // The native iOS 26 bar can't draw a badge: tint the icon red instead.
+    tintColor: badge != 0 ? kIgRed : null,
     label: label,
     onPressed: onPressed,
   );

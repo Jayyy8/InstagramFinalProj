@@ -1,5 +1,6 @@
 import "package:adaptive_platform_ui/adaptive_platform_ui.dart";
 import "package:flutter/cupertino.dart";
+import "package:flutter/services.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
 import "pages/auth_gate.dart";
@@ -19,6 +20,7 @@ class MyApp extends ConsumerWidget {
       title: "Instagram",
       cupertinoLightTheme: kLightTheme,
       cupertinoDarkTheme: kDarkTheme,
+      builder: _androidTheme,
       home: AuthGate(),
     );
 
@@ -40,4 +42,19 @@ class MyApp extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// On Android the adaptive app is a MaterialApp with the default light
+/// theme. Instagram's own colors (and every Cupertino widget) follow the
+/// phone's dark mode instead, through this Cupertino theme.
+Widget _androidTheme(BuildContext context, Widget? child) {
+  if (PlatformInfo.isIOS) return child!;
+  final dark = MediaQuery.platformBrightnessOf(context) == Brightness.dark;
+  return CupertinoTheme(
+    data: dark ? kDarkTheme : kLightTheme,
+    child: AnnotatedRegion<SystemUiOverlayStyle>(
+      value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      child: child!,
+    ),
+  );
 }

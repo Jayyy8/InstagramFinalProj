@@ -429,3 +429,68 @@ create policy "media delete own folder" on storage.objects
     bucket_id in ('avatars', 'posts', 'stories', 'chat')
     and (storage.foldername(name))[1] = auth.uid()::text
   );
+
+-- ════════════════════ Update 2 ════════════════════
+-- Video posts, location and music on stories and notes, notification
+-- badge, and replies / reactions / delete in direct messages.
+
+alter table public.posts add column if not exists media_type text not null default 'image';
+
+alter table public.stories add column if not exists location text;
+alter table public.stories add column if not exists music jsonb;
+alter table public.notes add column if not exists location text;
+alter table public.notes add column if not exists music jsonb;
+
+alter table public.profiles add column if not exists activity_seen_at timestamptz not null default now();
+
+alter table public.messages add column if not exists reply_to_id uuid
+  references public.messages (id) on delete set null;
+alter table public.messages add column if not exists deleted_for uuid[] not null default '{}';
+
+create table if not exists public.message_reactions (
+  message_id uuid not null references public.messages (id) on delete cascade,
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  emoji      text not null check (length(emoji) between 1 and 16),
+  created_at timestamptz not null default now(),
+  primary key (message_id, user_id)
+);
+alter table public.message_reactions enable row level security;
+
+-- Only the two people in the conversation see and add reactions.
+drop policy if exists "reactions read" on public.message_reactions;
+create policy "reactions read" on public.message_reactions
+  for select to authenticated using (
+    exists (
+      select 1 from public.messages m
+      where m.id = message_id and auth.uid() in (m.sender_id, m.receiver_id)
+    )
+  );
+drop policy if exists "reactions write own" on public.message_reactions;
+create policy "reactions write own" on public.message_reactions
+  for all to authenticated
+  using (user_id = auth.uid())
+  with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.messages m
+      where m.id = message_id and auth.uid() in (m.sender_id, m.receiver_id)
+    )
+  );
+
+-- "Delete for you": either person may hide a message for themselves.
+drop policy if exists "messages hide for me" on public.messages;
+create policy "messages hide for me" on public.messages
+  for update to authenticated using (auth.uid() in (sender_id, receiver_id));
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public'
+      and tablename = 'message_reactions'
+  ) then
+    alter publication supabase_realtime add table public.message_reactions;
+  end if;
+end;
+$$;
+alter table public.message_reactions replica identity full;

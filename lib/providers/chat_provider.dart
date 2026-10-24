@@ -106,6 +106,28 @@ class ChatNotifier
             if (m.receiverId == partnerId) _upsert(m);
           },
         )
+        // Unsent messages disappear for both people.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: "public",
+          table: "messages",
+          callback: (payload) {
+            final id = payload.oldRecord["id"];
+            if (id is String) _remove(id);
+          },
+        )
+        // Reactions added, changed or removed by either person.
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: "public",
+          table: "message_reactions",
+          callback: (payload) {
+            final id =
+                payload.newRecord["message_id"] ??
+                payload.oldRecord["message_id"];
+            if (id is String) _reloadReactions(id);
+          },
+        )
         .subscribe();
     ref.onDispose(() => client.removeChannel(channel));
 
@@ -118,11 +140,73 @@ class ChatNotifier
   void _upsert(Message m) {
     final list = state.valueOrNull;
     if (list == null) return;
+    if (m.deletedFor.contains(_me)) {
+      _remove(m.id);
+      return;
+    }
     final index = list.indexWhere((x) => x.id == m.id);
     if (index >= 0) {
-      state = AsyncData([...list]..[index] = m);
+      // Realtime rows carry no reactions: keep the ones already shown.
+      final merged = m.reactions.isEmpty
+          ? m.copyWith(reactions: list[index].reactions)
+          : m;
+      state = AsyncData([...list]..[index] = merged);
     } else {
       state = AsyncData([...list, m]);
+    }
+  }
+
+  void _remove(String id) {
+    final list = state.valueOrNull;
+    if (list == null || !list.any((m) => m.id == id)) return;
+    state = AsyncData(list.where((m) => m.id != id).toList());
+  }
+
+  void _setReactions(String id, Map<String, String> reactions) {
+    final list = state.valueOrNull;
+    if (list == null) return;
+    state = AsyncData([
+      for (final m in list)
+        if (m.id == id) m.copyWith(reactions: reactions) else m,
+    ]);
+  }
+
+  Future<void> _reloadReactions(String id) async {
+    final list = state.valueOrNull;
+    if (list == null || !list.any((m) => m.id == id)) return;
+    final all = await ref.read(repositoryProvider).reactionsFor([id]);
+    _setReactions(id, all[id] ?? const {});
+  }
+
+  /// Sets your reaction; the same emoji again removes it.
+  Future<void> react(Message message, String emoji) async {
+    final current = message.reactions[_me];
+    final next = {...message.reactions};
+    if (current == emoji) {
+      next.remove(_me);
+    } else {
+      next[_me] = emoji;
+    }
+    _setReactions(message.id, next);
+    try {
+      await ref
+          .read(repositoryProvider)
+          .react(message.id, current == emoji ? null : emoji);
+    } catch (_) {
+      _setReactions(message.id, message.reactions);
+      rethrow;
+    }
+  }
+
+  /// Hides a message for you only.
+  Future<void> deleteForMe(Message message) async {
+    _remove(message.id);
+    try {
+      await ref.read(repositoryProvider).deleteForMe(message);
+      ref.invalidate(conversationsProvider);
+    } catch (_) {
+      ref.invalidateSelf();
+      rethrow;
     }
   }
 
@@ -132,6 +216,7 @@ class ChatNotifier
     String? contextType,
     String? contextText,
     String? contextMediaUrl,
+    String? replyToId,
   }) async {
     final body = text.trim();
     if (body.isEmpty && photo == null) return;
@@ -146,6 +231,7 @@ class ChatNotifier
       contextText: contextText,
       contextMediaUrl: contextMediaUrl,
       mediaUrl: photo?.path,
+      replyToId: replyToId,
       pending: true,
     );
     _upsert(temp);
@@ -160,6 +246,7 @@ class ChatNotifier
             contextType: contextType,
             contextText: contextText,
             contextMediaUrl: contextMediaUrl,
+            replyToId: replyToId,
           );
       final list = state.valueOrNull ?? [];
       state = AsyncData([

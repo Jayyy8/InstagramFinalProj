@@ -82,6 +82,8 @@ class StoriesNotifier extends AsyncNotifier<List<StoryGroup>> {
     required bool video,
     required List<StoryOverlay> overlays,
     required int durationMs,
+    String? location,
+    Music? music,
   }) async {
     await ref
         .read(repositoryProvider)
@@ -90,6 +92,8 @@ class StoriesNotifier extends AsyncNotifier<List<StoryGroup>> {
           video: video,
           overlays: overlays,
           durationMs: durationMs,
+          location: location,
+          music: music,
         );
     await refresh();
   }

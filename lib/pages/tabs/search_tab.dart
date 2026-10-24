@@ -1,13 +1,16 @@
 import "package:flutter/cupertino.dart";
 import "package:flutter_riverpod/flutter_riverpod.dart";
 
+import "../../data/sample_feed.dart";
 import "../../models/feed_models.dart";
 import "../../providers/feed_provider.dart";
 import "../../providers/social_providers.dart";
 import "../../theme/app_theme.dart";
 import "../../widgets/dialogs.dart";
+import "../../widgets/gradient_avatar.dart";
 import "../../widgets/post_grid.dart";
 import "../../widgets/user_row.dart";
+import "../channel_profile_page.dart";
 
 /// Search accounts, or browse the explore grid when the field is empty.
 class SearchTab extends ConsumerStatefulWidget {
@@ -123,20 +126,78 @@ class _Results extends ConsumerWidget {
     }
 
     final results = ref.watch(userSearchProvider(query));
+    final q = query.toLowerCase();
+    // Sample channels match by handle or name too.
+    final channels = [
+      for (final e in kChannelInfo.entries)
+        if (e.key.contains(q) || e.value.name.toLowerCase().contains(q)) e,
+    ];
+
+    Widget channelRow(MapEntry<String, ChannelInfo> e) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => openChannel(context, e.key),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: [
+              GradientAvatar(
+                name: e.key,
+                imageUrls: channelAvatar(e.key),
+                size: 50,
+                ring: false,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          e.key,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: colors.text,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          CupertinoIcons.checkmark_seal_fill,
+                          size: 13,
+                          color: kIgBlue,
+                        ),
+                      ],
+                    ),
+                    Text(
+                      "${e.value.name} · ${compactCount(e.value.followers)} followers",
+                      style: TextStyle(color: colors.secondaryText),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return results.when(
       loading: () => const Center(child: CupertinoActivityIndicator()),
       error: (e, _) => Center(child: Text(errorText(e))),
-      data: (list) => list.isEmpty
+      data: (list) => list.isEmpty && channels.isEmpty
           ? Center(
               child: Text(
                 "No results for \"$query\"",
                 style: TextStyle(color: colors.secondaryText),
               ),
             )
-          : ListView.builder(
+          : ListView(
               padding: EdgeInsets.only(bottom: bottomBarInset(context)),
-              itemCount: list.length,
-              itemBuilder: (context, i) => UserRow(profile: list[i]),
+              children: [
+                for (final c in channels) channelRow(c),
+                for (final p in list) UserRow(profile: p),
+              ],
             ),
     );
   }

@@ -151,6 +151,12 @@ class FeedPost {
   final List<FeedComment> comments;
   final int commentCount;
 
+  /// The post is one video ([imageUrls] holds its URL).
+  final bool isVideo;
+
+  /// Sample posts that only appear on the channel's profile grid.
+  final bool showInFeed;
+
   const FeedPost({
     required this.id,
     required this.imageUrls,
@@ -167,6 +173,8 @@ class FeedPost {
     this.saved = false,
     this.comments = const [],
     this.commentCount = 0,
+    this.isVideo = false,
+    this.showInFeed = true,
   });
 
   bool get remote => author != null;
@@ -211,6 +219,8 @@ class FeedPost {
       saved: saved ?? this.saved,
       comments: comments ?? this.comments,
       commentCount: commentCount ?? this.commentCount,
+      isVideo: isVideo,
+      showInFeed: showInFeed,
     );
   }
 }
