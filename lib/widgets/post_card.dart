@@ -7,8 +7,10 @@ import "../models/audience.dart";
 import "../models/feed_models.dart";
 import "../navigation.dart";
 import "../pages/channel_profile_page.dart";
+import "../pages/create/post_details_page.dart" show TagLabel;
 import "../pages/story_viewer_page.dart";
 import "../providers/feed_provider.dart";
+import "../providers/post_music_provider.dart";
 import "../providers/social_providers.dart";
 import "../providers/story_provider.dart";
 import "../theme/app_theme.dart";
@@ -17,6 +19,7 @@ import "feed_image.dart";
 import "follow_button.dart";
 import "gradient_avatar.dart";
 import "post_actions.dart";
+import "post_extras_view.dart";
 import "post_video.dart";
 
 /// One post in the feed, laid out like Instagram:
@@ -34,6 +37,17 @@ class _PostCardState extends ConsumerState<PostCard> {
   bool _heart = false;
   bool _expanded = false;
   int _page = 0;
+
+  /// Tags shown on the photo (tap the person icon).
+  bool _showTags = false;
+  late final PostMusicNotifier _music = ref.read(postMusicProvider.notifier);
+
+  @override
+  void dispose() {
+    // The song stops when its post scrolls away.
+    _music.stopIf(widget.post.id);
+    super.dispose();
+  }
 
   void _doubleTap(FeedPost post) {
     _guard(ref.read(postActionsProvider).like(post));
@@ -89,6 +103,17 @@ class _PostCardState extends ConsumerState<PostCard> {
 
     final secondary = TextStyle(fontSize: 12, color: colors.text);
     final photos = post.photos;
+    final playing = ref.watch(postMusicProvider) == post.id;
+    // A page opened on top (a story, the "+" screen) stops the song.
+    if (playing && !(ModalRoute.of(context)?.isCurrent ?? true)) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _music.stopIf(post.id),
+      );
+    }
+    final tagsHere = [
+      for (final t in post.tags)
+        if (t.photo == _page) t,
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,9 +171,41 @@ class _PostCardState extends ConsumerState<PostCard> {
                               color: kIgBlue,
                             ),
                           ],
+                          if (post.aiLabel)
+                            Text(
+                              "  ·  AI info",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colors.secondaryText,
+                              ),
+                            ),
                         ],
                       ),
-                      if (!mine && !following && !post.remote)
+                      if (post.music != null)
+                        GestureDetector(
+                          onTap: () => _music.toggle(post),
+                          child: Row(
+                            children: [
+                              Icon(
+                                playing
+                                    ? CupertinoIcons.speaker_2_fill
+                                    : CupertinoIcons.music_note_2,
+                                size: 12,
+                                color: colors.text,
+                              ),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  post.music!.label,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: secondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      else if (!mine && !following && !post.remote)
                         Text("Suggested for you", style: secondary)
                       else if (post.location.isNotEmpty)
                         Text(
@@ -231,6 +288,44 @@ class _PostCardState extends ConsumerState<PostCard> {
                       ),
                     ),
                   ),
+                if (_showTags)
+                  LayoutBuilder(
+                    builder: (context, box) => Stack(
+                      children: [
+                        for (final t in tagsHere)
+                          Positioned(
+                            left: t.x * box.maxWidth,
+                            top: t.y * box.maxHeight,
+                            child: FractionalTranslation(
+                              translation: const Offset(-0.5, 0),
+                              child: TagLabel(username: t.username),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (tagsHere.isNotEmpty)
+                  Positioned(
+                    left: 12,
+                    bottom: 12,
+                    child: _PhotoBadge(
+                      icon: CupertinoIcons.person_fill,
+                      label: "Tagged people",
+                      onTap: () => setState(() => _showTags = !_showTags),
+                    ),
+                  ),
+                if (post.music != null && !post.isVideo)
+                  Positioned(
+                    right: 12,
+                    bottom: 12,
+                    child: _PhotoBadge(
+                      icon: playing
+                          ? CupertinoIcons.speaker_2_fill
+                          : CupertinoIcons.speaker_slash_fill,
+                      label: playing ? "Mute song" : "Play song",
+                      onTap: () => _music.toggle(post),
+                    ),
+                  ),
                 IgnorePointer(
                   child: Center(
                     child: AnimatedScale(
@@ -264,16 +359,18 @@ class _PostCardState extends ConsumerState<PostCard> {
                     ? CupertinoIcons.heart_fill
                     : CupertinoIcons.heart,
                 color: post.liked ? kIgRed : null,
-                count: post.likes,
+                // "Hide like count": only the owner sees the number.
+                count: post.hideLikes && !mine ? 0 : post.likes,
                 label: post.liked ? "Unlike" : "Like",
                 onTap: () => _guard(actions.toggleLike(post)),
               ),
-              _CountAction(
-                icon: CupertinoIcons.chat_bubble,
-                count: post.totalComments,
-                label: "Comment",
-                onTap: () => openComments(context, post),
-              ),
+              if (!post.commentsOff)
+                _CountAction(
+                  icon: CupertinoIcons.chat_bubble,
+                  count: post.totalComments,
+                  label: "Comment",
+                  onTap: () => openComments(context, post),
+                ),
               _CountAction(
                 icon: CupertinoIcons.arrow_2_squarepath,
                 count: post.remote ? 0 : post.baseLikes ~/ 68,
@@ -301,6 +398,9 @@ class _PostCardState extends ConsumerState<PostCard> {
           ),
         ),
 
+        if (post.poll != null) PostPollView(post: post),
+        if (post.prompt != null) PostPromptView(post: post),
+
         // ───── Caption, comments, time ─────
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -327,7 +427,8 @@ class _PostCardState extends ConsumerState<PostCard> {
                     style: TextStyle(fontSize: 14, color: colors.text),
                   ),
                 ),
-              if (post.totalComments > 0) ...[
+              if (post.link != null) PostLinkView(link: post.link!),
+              if (post.totalComments > 0 && !post.commentsOff) ...[
                 const SizedBox(height: 4),
                 GestureDetector(
                   onTap: () => openComments(context, post),
@@ -381,6 +482,39 @@ class _PostCardState extends ConsumerState<PostCard> {
         ),
         const SizedBox(height: 18),
       ],
+    );
+  }
+}
+
+/// Round dark button on a photo (tags, song).
+class _PhotoBadge extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _PhotoBadge({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: label,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 28,
+          height: 28,
+          decoration: const BoxDecoration(
+            color: Color(0xB3000000),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 14, color: const Color(0xFFFFFFFF)),
+        ),
+      ),
     );
   }
 }

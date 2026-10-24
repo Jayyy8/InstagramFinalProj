@@ -8,7 +8,11 @@ import "../theme/app_theme.dart";
 import "dialogs.dart";
 import "feed_image.dart";
 
-/// Song search sheet. Tap ▶ to listen, tap a row to choose it.
+/// Songs bookmarked in the picker (the "Saved" tab), for this app run.
+final List<Music> _savedSongs = [];
+
+/// Song search sheet like Instagram's: For you / Trending / Original audio /
+/// Saved. Tap the cover to listen, a row to choose it, the bookmark to save.
 Future<Music?> showMusicPicker(BuildContext context) {
   return showIgSheet<Music>(
     context,
@@ -33,6 +37,10 @@ class _MusicPickerState extends State<_MusicPicker> {
   String? _error;
   String? _playing;
 
+  /// 0 For you, 1 Trending, 2 Original audio, 3 Saved.
+  int _tab = 0;
+  static const _tabs = ["For you", "Trending", "Original audio", "Saved"];
+
   @override
   void initState() {
     super.initState();
@@ -48,12 +56,27 @@ class _MusicPickerState extends State<_MusicPicker> {
   }
 
   Future<void> _load(String term) async {
+    if (term.trim().isEmpty && _tab == 3) {
+      setState(() {
+        _results = List.of(_savedSongs);
+        _loading = false;
+        _error = null;
+      });
+      return;
+    }
+    final query = term.trim().isNotEmpty
+        ? term
+        : switch (_tab) {
+            1 => MusicService.trendingQuery,
+            2 => MusicService.originalQuery,
+            _ => "",
+          };
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final results = await MusicService.search(term);
+      final results = await MusicService.search(query);
       if (!mounted || term != _query.text) return;
       setState(() {
         _results = results;
@@ -66,6 +89,18 @@ class _MusicPickerState extends State<_MusicPicker> {
         _error = "Couldn't load songs. Check your internet connection.";
       });
     }
+  }
+
+  void _toggleSaved(Music m) {
+    setState(() {
+      final i = _savedSongs.indexWhere((s) => s.previewUrl == m.previewUrl);
+      if (i < 0) {
+        _savedSongs.insert(0, m);
+      } else {
+        _savedSongs.removeAt(i);
+        if (_tab == 3 && _query.text.isEmpty) _results = List.of(_savedSongs);
+      }
+    });
   }
 
   void _onChanged(String value) {
@@ -100,18 +135,40 @@ class _MusicPickerState extends State<_MusicPicker> {
             onChanged: _onChanged,
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 6),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              _query.text.isEmpty ? "For you" : "Results",
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-                color: colors.text,
-              ),
-            ),
+        SizedBox(
+          height: 40,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 6),
+            itemCount: _tabs.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 8),
+            itemBuilder: (context, i) {
+              final on = i == _tab;
+              return GestureDetector(
+                onTap: () {
+                  if (on) return;
+                  setState(() => _tab = i);
+                  _query.clear();
+                  _load("");
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: on ? colors.text : colors.field,
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    _tabs[i],
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: on ? colors.background : colors.text,
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
         Expanded(
@@ -131,7 +188,9 @@ class _MusicPickerState extends State<_MusicPicker> {
               : _results.isEmpty
               ? Center(
                   child: Text(
-                    "No songs found",
+                    _tab == 3 && _query.text.isEmpty
+                        ? "Tap the bookmark on a song to save it"
+                        : "No songs found",
                     style: TextStyle(color: colors.secondaryText),
                   ),
                 )
@@ -140,6 +199,9 @@ class _MusicPickerState extends State<_MusicPicker> {
                   itemBuilder: (context, i) {
                     final m = _results[i];
                     final playing = _playing == m.previewUrl;
+                    final saved = _savedSongs.any(
+                      (s) => s.previewUrl == m.previewUrl,
+                    );
                     return GestureDetector(
                       behavior: HitTestBehavior.opaque,
                       onTap: () => Navigator.of(context).pop(m),
@@ -150,14 +212,38 @@ class _MusicPickerState extends State<_MusicPicker> {
                         ),
                         child: Row(
                           children: [
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: SizedBox(
-                                width: 48,
-                                height: 48,
-                                child: m.artworkUrl == null
-                                    ? ColoredBox(color: colors.field)
-                                    : FeedImage(urls: [m.artworkUrl!]),
+                            // Tap the cover to listen.
+                            GestureDetector(
+                              onTap: () => _togglePreview(m),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(6),
+                                child: SizedBox(
+                                  width: 48,
+                                  height: 48,
+                                  child: Stack(
+                                    fit: StackFit.expand,
+                                    children: [
+                                      m.artworkUrl == null
+                                          ? ColoredBox(color: colors.field)
+                                          : FeedImage(urls: [m.artworkUrl!]),
+                                      ColoredBox(
+                                        color: playing
+                                            ? const Color(0x66000000)
+                                            : const Color(0x00000000),
+                                        child: Icon(
+                                          playing
+                                              ? CupertinoIcons.pause_fill
+                                              : CupertinoIcons.play_fill,
+                                          size: 18,
+                                          color: const Color(0xE6FFFFFF),
+                                          semanticLabel: playing
+                                              ? "Pause preview"
+                                              : "Play preview",
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -175,7 +261,9 @@ class _MusicPickerState extends State<_MusicPicker> {
                                     ),
                                   ),
                                   Text(
-                                    m.artist,
+                                    m.length.isEmpty
+                                        ? m.artist
+                                        : "${m.artist} · ${m.length}",
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
@@ -189,13 +277,14 @@ class _MusicPickerState extends State<_MusicPicker> {
                             CupertinoButton(
                               padding: const EdgeInsets.all(8),
                               minimumSize: const Size(40, 40),
-                              onPressed: () => _togglePreview(m),
+                              onPressed: () => _toggleSaved(m),
                               child: Icon(
-                                playing
-                                    ? CupertinoIcons.pause_circle_fill
-                                    : CupertinoIcons.play_circle,
-                                size: 30,
+                                saved
+                                    ? CupertinoIcons.bookmark_fill
+                                    : CupertinoIcons.bookmark,
+                                size: 24,
                                 color: colors.text,
+                                semanticLabel: saved ? "Unsave" : "Save",
                               ),
                             ),
                           ],

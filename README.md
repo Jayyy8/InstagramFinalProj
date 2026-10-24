@@ -19,6 +19,15 @@ imports in `lib/`), so it adapts to the phone it runs on:
 - **Feed:** posts with up to 10 photos or one video (Supabase Storage), likes,
   comments, saves, share to DMs, delete your own posts, pull to refresh.
   Posts from you and people you follow come first, then the sample channels.
+- **New post (the "+" button):** Instagram's create screen with your photo
+  gallery, a big preview, "Select" for up to 10 photos and the
+  POST / STORY / INSTANTS / REEL / LIVE switcher. The editor has Audio, Text,
+  Overlay, Filter (12 filters), Edit (brightness, contrast, saturation,
+  warmth, fade) and Ratio (original, 4:5, 1:1, 16:9); edits are drawn into
+  the uploaded photo. The details page adds a caption, a poll, a prompt, a
+  song, tagged people, a location, a link, the AI label, "Post only to
+  profile", the audience, "Also share on your story", hide like count and
+  turn off commenting.
 - **Reels:** videos from you and people you follow, then the sample channels.
 - **Sample channel profiles:** tap a sample account to see its profile and posts.
 - **Stories:** upload photos or videos (camera or gallery), add text, a
@@ -40,8 +49,9 @@ imports in `lib/`), so it adapts to the phone it runs on:
    all of [`supabase/schema.sql`](supabase/schema.sql) and press Run. It
    creates the tables, security rules, storage buckets and turns on realtime
    for messages. It is safe to run again: **run it again after every update**
-   that changes it (the latest adds video posts, music, locations, message
-   reactions and replies).
+   that changes it (the latest, Update 5, adds the new post options: song,
+   poll, prompt, tags, link, AI label, post only to profile, hide like count
+   and turn off commenting).
 2. **Group members:** replace the placeholders in `lib/data/developers.dart`.
 3. `flutter pub get`
 

@@ -219,17 +219,26 @@ class _CommentsPageState extends ConsumerState<CommentsPage> {
             ),
           ),
           Container(height: 0.5, color: colors.separator),
-          MessageInputBar(
-            controller: _controller,
-            placeholder: "Add a comment for ${post.authorName}...",
-            onSend: () => _send(post),
-            leading: GradientAvatar(
-              name: myProfile?.username ?? "",
-              imageUrls: myProfile?.avatarUrls,
-              size: 36,
-              ring: false,
+          if (post.commentsOff)
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                "Commenting has been turned off.",
+                style: TextStyle(color: colors.secondaryText, fontSize: 14),
+              ),
+            )
+          else
+            MessageInputBar(
+              controller: _controller,
+              placeholder: "Add a comment for ${post.authorName}...",
+              onSend: () => _send(post),
+              leading: GradientAvatar(
+                name: myProfile?.username ?? "",
+                imageUrls: myProfile?.avatarUrls,
+                size: 36,
+                ring: false,
+              ),
             ),
-          ),
         ],
       ),
     );

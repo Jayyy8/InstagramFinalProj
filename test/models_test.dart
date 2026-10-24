@@ -1,9 +1,12 @@
+import "package:flutter/painting.dart";
 import "package:flutter_test/flutter_test.dart";
 import "package:oauth_activity/data/sample_feed.dart";
 import "package:oauth_activity/models/audience.dart";
 import "package:oauth_activity/models/feed_models.dart";
+import "package:oauth_activity/models/post_extras.dart";
 import "package:oauth_activity/models/social_models.dart";
 import "package:oauth_activity/providers/story_provider.dart";
+import "package:oauth_activity/services/photo_editing.dart";
 
 void main() {
   group("number formatting", () {
@@ -160,10 +163,7 @@ void main() {
     };
 
     test("reads replies, reactions and deleted_for", () {
-      final m = Message.fromMap(
-        row(deletedFor: ["b"]),
-        reactions: {"b": "❤️"},
-      );
+      final m = Message.fromMap(row(deletedFor: ["b"]), reactions: {"b": "❤️"});
       expect(m.replyToId, "m0");
       expect(m.reactions["b"], "❤️");
       expect(m.deletedFor, ["b"]);
@@ -330,6 +330,81 @@ void main() {
         post.copyWith(audience: Audience.onlyMe).audience,
         Audience.onlyMe,
       );
+    });
+  });
+
+  group("post editor", () {
+    test("Ratio crops the middle of the photo", () {
+      expect(
+        cropRect(1000, 1000, PostRatio.original),
+        const Rect.fromLTWH(0, 0, 1000, 1000),
+      );
+      // A square photo cropped to 4:5 keeps the full height.
+      final portrait = cropRect(1000, 1000, PostRatio.portrait);
+      expect(portrait.height, 1000);
+      expect(portrait.width, 800);
+      expect(portrait.left, 100);
+      // A tall photo cropped to 16:9 keeps the full width.
+      final wide = cropRect(900, 1600, PostRatio.landscape);
+      expect(wide.width, 900);
+      expect(wide.height, closeTo(506.25, 0.01));
+      expect(PostRatio.landscape.next, PostRatio.original);
+    });
+
+    test("an untouched photo has the identity color matrix", () {
+      final edit = PhotoEdit();
+      expect(edit.changed, isFalse);
+      for (int i = 0; i < 20; i++) {
+        expect(edit.matrix[i], closeTo(kIdentityMatrix[i], 1e-9));
+      }
+      edit.filter = PhotoFilter.moon;
+      expect(edit.changed, isTrue);
+      // Moon is black and white: red, green and blue rows are equal.
+      final m = edit.matrix;
+      expect(m[0], closeTo(m[5], 1e-9));
+      expect(m[1], closeTo(m[11], 1e-9));
+    });
+
+    test("poll, tags and link survive a round trip through JSON", () {
+      const poll = Poll(question: "Best?", options: ["A", "B", "C"]);
+      final back = Poll.fromJson(poll.toJson())!;
+      expect(back.question, "Best?");
+      expect(back.options, ["A", "B", "C"]);
+      expect(
+        Poll.fromJson({
+          "question": "x",
+          "options": ["only one"],
+        }),
+        isNull,
+      );
+
+      final tags = PostTag.listFromJson([
+        const PostTag(
+          userId: "u1",
+          username: "ana",
+          photo: 1,
+          x: 0.2,
+          y: 0.7,
+        ).toJson(),
+        {"username": "no id"},
+      ]);
+      expect(tags.length, 1);
+      expect(tags.first.username, "ana");
+      expect(tags.first.photo, 1);
+
+      const link = PostLink(url: "https://www.example.com/page");
+      expect(PostLink.fromJson(link.toJson())!.label, "example.com/page");
+    });
+
+    test("song length is shown as m:ss", () {
+      const m = Music(
+        title: "T",
+        artist: "A",
+        previewUrl: "u",
+        durationMs: 201000,
+      );
+      expect(m.length, "3:21");
+      expect(const Music(title: "T", artist: "A", previewUrl: "u").length, "");
     });
   });
 }

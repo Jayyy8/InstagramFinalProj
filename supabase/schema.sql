@@ -672,3 +672,57 @@ create policy "instant views read" on public.instant_views
 drop policy if exists "instant views insert own" on public.instant_views;
 create policy "instant views insert own" on public.instant_views
   for insert to authenticated with check (viewer_id = auth.uid());
+
+-- ════════════════════ Update 5: New post options ════════════════════
+-- What the "New post" details page can add: a song, a poll, a prompt,
+-- tagged people, a link, the AI label, "Post only to profile", and the
+-- "More options" switches (hide like count, turn off commenting).
+-- Filters, edits, text, overlays and the crop are drawn into the photo
+-- itself, so they need no columns.
+
+alter table public.posts add column if not exists music        jsonb;
+alter table public.posts add column if not exists poll         jsonb;
+alter table public.posts add column if not exists prompt       text;
+alter table public.posts add column if not exists tags         jsonb not null default '[]'::jsonb;
+alter table public.posts add column if not exists link         jsonb;
+alter table public.posts add column if not exists ai_label     boolean not null default false;
+alter table public.posts add column if not exists profile_only boolean not null default false;
+alter table public.posts add column if not exists hide_likes   boolean not null default false;
+alter table public.posts add column if not exists comments_off boolean not null default false;
+
+-- One vote per person per poll.
+create table if not exists public.poll_votes (
+  post_id    uuid not null references public.posts (id) on delete cascade,
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  option     smallint not null check (option between 0 and 3),
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+
+alter table public.poll_votes enable row level security;
+
+drop policy if exists "poll votes read" on public.poll_votes;
+create policy "poll votes read" on public.poll_votes
+  for select to authenticated using (true);
+drop policy if exists "poll votes insert own" on public.poll_votes;
+create policy "poll votes insert own" on public.poll_votes
+  for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists "poll votes update own" on public.poll_votes;
+create policy "poll votes update own" on public.poll_votes
+  for update to authenticated using (user_id = auth.uid());
+drop policy if exists "poll votes delete own" on public.poll_votes;
+create policy "poll votes delete own" on public.poll_votes
+  for delete to authenticated using (user_id = auth.uid());
+
+-- Nobody can comment on a post that has commenting turned off
+-- (except its owner).
+drop policy if exists "comments insert own" on public.comments;
+create policy "comments insert own" on public.comments
+  for insert to authenticated with check (
+    user_id = auth.uid()
+    and exists (
+      select 1 from public.posts p
+      where p.id = post_id
+        and (p.comments_off = false or p.user_id = auth.uid())
+    )
+  );

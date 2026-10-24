@@ -5,6 +5,7 @@ import "package:supabase_flutter/supabase_flutter.dart";
 
 import "../models/audience.dart";
 import "../models/feed_models.dart";
+import "../models/post_extras.dart";
 import "../models/social_models.dart";
 
 /// Every Supabase read and write the app makes, in one place.
@@ -267,6 +268,10 @@ class SocialRepository {
     if (rows.isEmpty) return [];
     final ids = [for (final r in rows) r["id"] as String];
     final myId = me;
+    final pollIds = [
+      for (final r in rows)
+        if (r["poll"] != null) r["id"] as String,
+    ];
 
     final results = await Future.wait([
       _db.from("likes").select("post_id, user_id").inFilter("post_id", ids),
@@ -278,6 +283,15 @@ class SocialRepository {
           .eq("user_id", myId)
           .inFilter("post_id", ids)
           .then((v) => v, onError: (_) => <Map<String, dynamic>>[]),
+      // poll_votes comes with Update 5 of schema.sql.
+      if (pollIds.isEmpty)
+        Future.value(<Map<String, dynamic>>[])
+      else
+        _db
+            .from("poll_votes")
+            .select("post_id, user_id, option")
+            .inFilter("post_id", pollIds)
+            .then((v) => v, onError: (_) => <Map<String, dynamic>>[]),
     ]);
     final authors = await _profiles([
       for (final r in rows) r["user_id"] as String,
@@ -296,6 +310,15 @@ class SocialRepository {
       commentCount[id] = (commentCount[id] ?? 0) + 1;
     }
     final saved = {for (final r in results[2]) r["post_id"] as String};
+    final votes = <String, List<int>>{};
+    final myVotes = <String, int>{};
+    for (final v in results[3]) {
+      final id = v["post_id"] as String;
+      final option = (v["option"] as num).toInt();
+      final counts = votes.putIfAbsent(id, () => List.filled(4, 0));
+      if (option >= 0 && option < counts.length) counts[option]++;
+      if (v["user_id"] == myId) myVotes[id] = option;
+    }
 
     return [
       for (final r in rows)
@@ -318,6 +341,19 @@ class SocialRepository {
               commentCount: commentCount[id] ?? 0,
               isVideo: r["media_type"] == "video",
               audience: Audience.fromKey(r["audience"]),
+              music: Music.fromJson(r["music"]),
+              poll: Poll.fromJson(r["poll"]),
+              pollVotes: votes[id] ?? const [],
+              myVote: myVotes[id],
+              prompt: (r["prompt"] as String?)?.trim().isEmpty ?? true
+                  ? null
+                  : r["prompt"] as String,
+              tags: PostTag.listFromJson(r["tags"]),
+              link: PostLink.fromJson(r["link"]),
+              aiLabel: r["ai_label"] == true,
+              hideLikes: r["hide_likes"] == true,
+              commentsOff: r["comments_off"] == true,
+              profileOnly: r["profile_only"] == true,
             );
           }(),
     ];
@@ -331,7 +367,11 @@ class SocialRepository {
         .inFilter("user_id", [me, ...following])
         .order("created_at", ascending: false)
         .limit(60);
-    return _toPosts(rows);
+    // "Post only to profile" posts stay off the feed.
+    return _toPosts([
+      for (final r in rows)
+        if (r["profile_only"] != true) r,
+    ]);
   }
 
   Future<List<FeedPost>> userPosts(String userId) async {
@@ -396,6 +436,15 @@ class SocialRepository {
     required String location,
     XFile? video,
     Audience audience = Audience.public,
+    Music? music,
+    Poll? poll,
+    String? prompt,
+    List<PostTag> tags = const [],
+    PostLink? link,
+    bool aiLabel = false,
+    bool hideLikes = false,
+    bool commentsOff = false,
+    bool profileOnly = false,
   }) async {
     final urls = <String>[];
     if (video != null) {
@@ -416,6 +465,18 @@ class SocialRepository {
           if (video != null) "media_type": "video",
           // Only sent when not public, so older databases keep working.
           if (audience != Audience.public) "audience": audience.key,
+          // The extras below need Update 5 of schema.sql; each one is only
+          // sent when used, so plain posts work without it.
+          "music": ?music?.toJson(),
+          "poll": ?poll?.toJson(),
+          if (prompt != null && prompt.trim().isNotEmpty)
+            "prompt": prompt.trim(),
+          if (tags.isNotEmpty) "tags": [for (final t in tags) t.toJson()],
+          "link": ?link?.toJson(),
+          if (aiLabel) "ai_label": true,
+          if (hideLikes) "hide_likes": true,
+          if (commentsOff) "comments_off": true,
+          if (profileOnly) "profile_only": true,
         })
         .select(_postColumns)
         .single();
@@ -487,6 +548,23 @@ class SocialRepository {
 
   Future<void> deleteComment(String id) async {
     await _db.from("comments").delete().eq("id", id);
+  }
+
+  /// Votes on a post's poll; null removes your vote.
+  Future<void> votePoll(String postId, int? option) async {
+    if (option == null) {
+      await _db
+          .from("poll_votes")
+          .delete()
+          .eq("post_id", postId)
+          .eq("user_id", me);
+      return;
+    }
+    await _db.from("poll_votes").upsert({
+      "post_id": postId,
+      "user_id": me,
+      "option": option,
+    }, onConflict: "post_id,user_id");
   }
 
   Future<void> setPostAudience(String postId, Audience audience) async {

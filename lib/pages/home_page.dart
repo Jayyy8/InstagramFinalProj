@@ -4,12 +4,13 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 
 import "../navigation.dart";
 import "../providers/chat_provider.dart";
+import "../providers/post_music_provider.dart";
 import "../providers/social_providers.dart";
 import "../theme/app_theme.dart";
 import "../widgets/android_bars.dart";
 import "../widgets/sub_page.dart";
 import "activity_page.dart";
-import "create_sheet.dart";
+import "create/create_page.dart";
 import "discover_people_page.dart";
 import "new_message_page.dart";
 import "settings_page.dart";
@@ -32,6 +33,12 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage>
     with WidgetsBindingObserver {
   int _index = 0;
+
+  void _selectTab(int i) {
+    // A post's song doesn't follow you to other tabs.
+    if (i != _index) ref.read(postMusicProvider.notifier).stop();
+    setState(() => _index = i);
+  }
 
   @override
   void initState() {
@@ -96,7 +103,7 @@ class _HomePageState extends ConsumerState<HomePage>
     return CupertinoButton(
       padding: EdgeInsets.zero,
       minimumSize: const Size(40, 40),
-      onPressed: () => showCreateSheet(context, ref),
+      onPressed: () => pushFullscreen(context, const CreatePage()),
       child: Icon(
         CupertinoIcons.add,
         size: 28,
@@ -186,7 +193,10 @@ class _HomePageState extends ConsumerState<HomePage>
             leading: BarIcon(
               icon: const Icon(CupertinoIcons.add, color: white, size: 28),
               label: "Create",
-              onTap: () => showCreateSheet(context, ref),
+              onTap: () => pushFullscreen(
+                context,
+                const CreatePage(mode: CreateMode.reel),
+              ),
             ),
             title: const ReelsHeaderTitle(onDark: true),
             centerTitle: true,
@@ -236,7 +246,7 @@ class _HomePageState extends ConsumerState<HomePage>
           data: _index == 1 ? kDarkTheme : CupertinoTheme.of(context),
           child: IgBottomBar(
             selectedIndex: _index,
-            onTap: (i) => setState(() => _index = i),
+            onTap: _selectTab,
             items: [
               const IgTabItem(
                 icon: CupertinoIcons.house,
@@ -269,7 +279,7 @@ class _HomePageState extends ConsumerState<HomePage>
           ),
         ),
         selectedIndex: _index,
-        onTap: (i) => setState(() => _index = i),
+        onTap: _selectTab,
         // Black icons like Instagram on iPhone. On Android this color is
         // the Material indicator, so keep the default there.
         selectedItemColor: PlatformInfo.isIOS
@@ -323,7 +333,7 @@ class _HomePageState extends ConsumerState<HomePage>
     return PopScope(
       canPop: _index == 0,
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop && _index != 0) setState(() => _index = 0);
+        if (!didPop && _index != 0) _selectTab(0);
       },
       child: scaffold,
     );

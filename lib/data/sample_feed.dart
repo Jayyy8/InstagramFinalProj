@@ -1,4 +1,6 @@
 import "../models/feed_models.dart";
+import "../models/post_extras.dart";
+import "../models/social_models.dart";
 
 // ───────────── Photo helpers ─────────────
 
@@ -107,6 +109,11 @@ List<FeedPost> buildSamplePosts() {
       location: "Downtown Arena",
       timeAgoText: "2 hours ago",
       baseLikes: 12840,
+      poll: const Poll(
+        question: "Who takes it tonight?",
+        options: ["Home team", "Visitors", "Overtime thriller"],
+      ),
+      pollVotes: const [412, 268, 157],
       comments: const [
         FeedComment(author: "alex.hoops", text: "That atmosphere is unreal."),
         FeedComment(author: "court_vision", text: "Best seats in the house."),
@@ -122,6 +129,14 @@ List<FeedPost> buildSamplePosts() {
       location: "National Stadium",
       timeAgoText: "3 hours ago",
       baseLikes: 28410,
+      music: const Music(
+        title: "Blinding Lights",
+        artist: "The Weeknd",
+        previewUrl:
+            "https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/19/d6/60/19d660ff-e3a9-8377-15a3-ce4b28e89cac/mzaf_18422426156481158187.plus.aac.p.m4a",
+        artworkUrl:
+            "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6f/bc/e6/6fbce6c4-c38c-72d8-4fd0-66cfff32f679/20UMGIM12176.rgb.jpg/300x300bb.jpg",
+      ),
       comments: const [
         FeedComment(author: "sofia_fc", text: "Can't wait for kickoff!"),
       ],

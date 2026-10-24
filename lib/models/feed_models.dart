@@ -1,4 +1,5 @@
 import "audience.dart";
+import "post_extras.dart";
 import "social_models.dart";
 
 enum FeedCategory { nba, football, news, docs }
@@ -161,6 +162,29 @@ class FeedPost {
   /// Sample posts that only appear on the channel's profile grid.
   final bool showInFeed;
 
+  // ───── Chosen on the "New post" details page ─────
+  final Music? music;
+  final Poll? poll;
+
+  /// Votes per poll option, and the option you picked (null = no vote).
+  final List<int> pollVotes;
+  final int? myVote;
+
+  /// "Prompt" sticker: a question others answer in the comments.
+  final String? prompt;
+  final List<PostTag> tags;
+  final PostLink? link;
+
+  /// "AI info" label (made or edited with AI).
+  final bool aiLabel;
+
+  /// Like and view counts hidden from others.
+  final bool hideLikes;
+  final bool commentsOff;
+
+  /// Posted only to the profile grid, not to followers' feeds.
+  final bool profileOnly;
+
   const FeedPost({
     required this.id,
     required this.imageUrls,
@@ -180,6 +204,17 @@ class FeedPost {
     this.isVideo = false,
     this.audience = Audience.public,
     this.showInFeed = true,
+    this.music,
+    this.poll,
+    this.pollVotes = const [],
+    this.myVote,
+    this.prompt,
+    this.tags = const [],
+    this.link,
+    this.aiLabel = false,
+    this.hideLikes = false,
+    this.commentsOff = false,
+    this.profileOnly = false,
   });
 
   bool get remote => author != null;
@@ -208,6 +243,8 @@ class FeedPost {
     int? baseLikes,
     List<FeedComment>? comments,
     int? commentCount,
+    List<int>? pollVotes,
+    int? Function()? myVote,
   }) {
     return FeedPost(
       id: id,
@@ -228,6 +265,17 @@ class FeedPost {
       isVideo: isVideo,
       audience: audience ?? this.audience,
       showInFeed: showInFeed,
+      music: music,
+      poll: poll,
+      pollVotes: pollVotes ?? this.pollVotes,
+      myVote: myVote != null ? myVote() : this.myVote,
+      prompt: prompt,
+      tags: tags,
+      link: link,
+      aiLabel: aiLabel,
+      hideLikes: hideLikes,
+      commentsOff: commentsOff,
+      profileOnly: profileOnly,
     );
   }
 }

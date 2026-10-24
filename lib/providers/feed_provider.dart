@@ -4,6 +4,8 @@ import "package:image_picker/image_picker.dart";
 import "../data/sample_feed.dart";
 import "../models/audience.dart";
 import "../models/feed_models.dart";
+import "../models/post_extras.dart";
+import "../models/social_models.dart";
 import "../services/social_repository.dart";
 import "social_providers.dart";
 import "supabase_providers.dart";
@@ -313,6 +315,31 @@ class PostActions {
     );
   }
 
+  /// Votes on a poll; tapping your own answer again takes the vote back.
+  Future<void> vote(FeedPost post, int option) async {
+    final now = _current(post) ?? post;
+    final before = now.myVote;
+    final next = before == option ? null : option;
+    List<int> counts(FeedPost p) {
+      final c = p.pollVotes.isEmpty ? List.filled(4, 0) : List.of(p.pollVotes);
+      if (before != null) c[before] = (c[before] - 1).clamp(0, 1 << 30);
+      if (next != null) c[next]++;
+      return c;
+    }
+
+    _change(now, (p) => p.copyWith(pollVotes: counts(p), myVote: () => next));
+    if (!now.remote) return;
+    try {
+      await _repo.votePoll(now.id, next);
+    } catch (_) {
+      _change(
+        now,
+        (p) => p.copyWith(pollVotes: now.pollVotes, myVote: () => before),
+      );
+      rethrow;
+    }
+  }
+
   /// Changes who can see one of your posts.
   Future<void> setAudience(FeedPost post, Audience audience) async {
     final before = post.audience;
@@ -347,6 +374,15 @@ class PostActions {
     required String location,
     XFile? video,
     Audience audience = Audience.public,
+    Music? music,
+    Poll? poll,
+    String? prompt,
+    List<PostTag> tags = const [],
+    PostLink? link,
+    bool aiLabel = false,
+    bool hideLikes = false,
+    bool commentsOff = false,
+    bool profileOnly = false,
   }) async {
     final post = await _repo.createPost(
       photos: photos,
@@ -354,8 +390,19 @@ class PostActions {
       location: location,
       video: video,
       audience: audience,
+      music: music,
+      poll: poll,
+      prompt: prompt,
+      tags: tags,
+      link: link,
+      aiLabel: aiLabel,
+      hideLikes: hideLikes,
+      commentsOff: commentsOff,
+      profileOnly: profileOnly,
     );
-    _ref.read(homeFeedProvider.notifier).prepend(post);
+    if (!post.profileOnly) {
+      _ref.read(homeFeedProvider.notifier).prepend(post);
+    }
     _ref.invalidate(userPostIdsProvider(post.author!.id));
     _ref.invalidate(profileStatsProvider(post.author!.id));
     return post;

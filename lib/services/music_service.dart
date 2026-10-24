@@ -13,6 +13,10 @@ class MusicService {
   /// Songs shown before you type anything.
   static const String popularQuery = "top hits 2026";
 
+  /// The song picker's tabs (Saved is kept on the phone).
+  static const String trendingQuery = "viral hits";
+  static const String originalQuery = "acoustic sessions";
+
   static Future<List<Music>> search(String term) async {
     final q = term.trim().isEmpty ? popularQuery : term.trim();
     final uri = Uri.https(_host, "/search", {
@@ -38,6 +42,7 @@ class MusicService {
               "100x100",
               "300x300",
             ),
+            durationMs: (r["trackTimeMillis"] as num?)?.toInt(),
           ),
     ];
   }

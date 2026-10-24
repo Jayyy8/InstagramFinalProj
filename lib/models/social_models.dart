@@ -119,11 +119,15 @@ class Music {
   final String previewUrl;
   final String? artworkUrl;
 
+  /// Length of the full song (shown in the song picker).
+  final int? durationMs;
+
   const Music({
     required this.title,
     required this.artist,
     required this.previewUrl,
     this.artworkUrl,
+    this.durationMs,
   });
 
   static Music? fromJson(Object? value) {
@@ -147,6 +151,14 @@ class Music {
 
   /// "Title · Artist"
   String get label => artist.isEmpty ? title : "$title · $artist";
+
+  /// "3:21", or "" when unknown.
+  String get length {
+    final ms = durationMs;
+    if (ms == null || ms <= 0) return "";
+    final s = ms ~/ 1000;
+    return "${s ~/ 60}:${(s % 60).toString().padLeft(2, "0")}";
+  }
 }
 
 /// One photo or video inside a story.
