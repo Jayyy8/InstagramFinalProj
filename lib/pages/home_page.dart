@@ -165,7 +165,43 @@ class _HomePageState extends ConsumerState<HomePage>
           actions: [heart],
         );
       case 1:
-        return bar(title: "Reels", center: false);
+        // Reels: "+", "Reels  Friends", topics filter. Black on Android.
+        const white = Color(0xFFFFFFFF);
+        return AdaptiveAppBar(
+          leading: _leadingPlus(),
+          titleWidget: const ReelsHeaderTitle(),
+          actions: [
+            barAction(
+              context,
+              const AppIcon(
+                "slider.horizontal.3",
+                CupertinoIcons.slider_horizontal_3,
+              ),
+              label: "Your algorithm",
+              onPressed: () => showReelTopics(context),
+            ),
+          ],
+          appBar: IgTopBar(
+            background: const Color(0xFF000000),
+            leading: BarIcon(
+              icon: const Icon(CupertinoIcons.add, color: white, size: 28),
+              label: "Create",
+              onTap: () => showCreateSheet(context, ref),
+            ),
+            title: const ReelsHeaderTitle(onDark: true),
+            centerTitle: true,
+            actions: [
+              BarIcon(
+                icon: const Icon(
+                  CupertinoIcons.slider_horizontal_3,
+                  color: white,
+                ),
+                label: "Your algorithm",
+                onTap: () => showReelTopics(context),
+              ),
+            ],
+          ),
+        );
       case 2:
         return bar(titleWidget: _wordmark(username), actions: [compose]);
       case 3:
@@ -195,38 +231,42 @@ class _HomePageState extends ConsumerState<HomePage>
       appBar: _appBar(username, notifications),
       bottomNavigationBar: AdaptiveBottomNavigationBar(
         // Instagram's own icon-only bar on Android.
-        bottomNavigationBar: IgBottomBar(
-          selectedIndex: _index,
-          onTap: (i) => setState(() => _index = i),
-          items: [
-            const IgTabItem(
-              icon: CupertinoIcons.house,
-              selectedIcon: CupertinoIcons.house_fill,
-              label: "Home",
-            ),
-            const IgTabItem(
-              icon: CupertinoIcons.play_rectangle,
-              selectedIcon: CupertinoIcons.play_rectangle_fill,
-              label: "Reels",
-            ),
-            IgTabItem(
-              icon: CupertinoIcons.paperplane,
-              selectedIcon: CupertinoIcons.paperplane_fill,
-              label: "Messages",
-              badge: unread,
-            ),
-            const IgTabItem(
-              icon: CupertinoIcons.search,
-              selectedIcon: CupertinoIcons.search,
-              label: "Search",
-            ),
-            IgTabItem(
-              icon: CupertinoIcons.person_crop_circle,
-              selectedIcon: CupertinoIcons.person_crop_circle_fill,
-              label: "Profile",
-              avatar: me?.avatarUrls,
-            ),
-          ],
+        // Black on Reels, like Instagram.
+        bottomNavigationBar: CupertinoTheme(
+          data: _index == 1 ? kDarkTheme : CupertinoTheme.of(context),
+          child: IgBottomBar(
+            selectedIndex: _index,
+            onTap: (i) => setState(() => _index = i),
+            items: [
+              const IgTabItem(
+                icon: CupertinoIcons.house,
+                selectedIcon: CupertinoIcons.house_fill,
+                label: "Home",
+              ),
+              const IgTabItem(
+                icon: CupertinoIcons.play_rectangle,
+                selectedIcon: CupertinoIcons.play_rectangle_fill,
+                label: "Reels",
+              ),
+              IgTabItem(
+                icon: CupertinoIcons.paperplane,
+                selectedIcon: CupertinoIcons.paperplane_fill,
+                label: "Messages",
+                badge: unread,
+              ),
+              const IgTabItem(
+                icon: CupertinoIcons.search,
+                selectedIcon: CupertinoIcons.search,
+                label: "Search",
+              ),
+              IgTabItem(
+                icon: CupertinoIcons.person_crop_circle,
+                selectedIcon: CupertinoIcons.person_crop_circle_fill,
+                label: "Profile",
+                avatar: me?.avatarUrls,
+              ),
+            ],
+          ),
         ),
         selectedIndex: _index,
         onTap: (i) => setState(() => _index = i),

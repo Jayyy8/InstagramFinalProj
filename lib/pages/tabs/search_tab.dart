@@ -203,15 +203,31 @@ class _Results extends ConsumerWidget {
   }
 }
 
-class _Explore extends ConsumerWidget {
+class _Explore extends ConsumerStatefulWidget {
   const _Explore();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_Explore> createState() => _ExploreState();
+}
+
+class _ExploreState extends ConsumerState<_Explore> {
+  /// 0 = For you, 1 = Reels, then one chip per topic.
+  int _chip = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
     final ids = ref.watch(explorePostIdsProvider).valueOrNull ?? const [];
     final remote = postsFor(ref, ids);
     final samples = ref.watch(samplePostsProvider);
-    final List<FeedPost> posts = [...remote, ...samples];
+    final all = <FeedPost>[...remote, ...samples];
+    final topics = FeedCategory.values;
+    final List<FeedPost> posts = switch (_chip) {
+      0 => all,
+      1 => all.where((p) => p.isVideo).toList(),
+      _ => all.where((p) => p.category == topics[_chip - 2]).toList(),
+    };
+    final chips = ["For you", "Reels", for (final t in topics) t.label];
 
     return CustomScrollView(
       slivers: [
@@ -221,6 +237,52 @@ class _Explore extends ConsumerWidget {
             await ref.read(explorePostIdsProvider.future);
           },
         ),
+        SliverToBoxAdapter(
+          child: SizedBox(
+            height: 44,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+              itemCount: chips.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, i) => Semantics(
+                button: true,
+                selected: i == _chip,
+                child: GestureDetector(
+                  onTap: () => setState(() => _chip = i),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: i == _chip ? colors.text : colors.field,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      chips[i],
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: i == _chip ? colors.background : colors.text,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        if (posts.isEmpty)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.all(40),
+              child: Center(
+                child: Text(
+                  "Nothing here yet.",
+                  style: TextStyle(color: colors.secondaryText),
+                ),
+              ),
+            ),
+          ),
         SliverPadding(
           padding: EdgeInsets.only(bottom: bottomBarInset(context)),
           sliver: SliverGrid.builder(

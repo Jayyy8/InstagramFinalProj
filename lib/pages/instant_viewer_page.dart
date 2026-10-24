@@ -3,8 +3,10 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 
 import "../models/feed_models.dart";
 import "../models/social_models.dart";
+import "../providers/chat_provider.dart";
 import "../providers/social_providers.dart";
 import "../theme/app_theme.dart";
+import "../widgets/dialogs.dart";
 import "../widgets/feed_image.dart";
 import "../widgets/gradient_avatar.dart";
 
@@ -21,6 +23,49 @@ class InstantViewerPage extends ConsumerStatefulWidget {
 
 class _InstantViewerPageState extends ConsumerState<InstantViewerPage> {
   int _index = 0;
+  final TextEditingController _reply = TextEditingController();
+  final FocusNode _replyFocus = FocusNode();
+  bool _sending = false;
+
+  /// Instants you sent a heart to.
+  final Set<String> _liked = {};
+
+  @override
+  void dispose() {
+    _reply.dispose();
+    _replyFocus.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send(String text) async {
+    final body = text.trim();
+    if (body.isEmpty || _sending) return;
+    final instant = _current;
+    setState(() => _sending = true);
+    try {
+      await sendDirect(
+        ref,
+        to: instant.profile.id,
+        text: body,
+        contextType: "instant_reply",
+        contextMediaUrl: instant.mediaUrl,
+      );
+      _reply.clear();
+      _replyFocus.unfocus();
+      if (mounted) showToast(context, "Sent");
+    } catch (e) {
+      if (mounted) showToast(context, errorText(e), error: true);
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  void _heart() {
+    final id = _current.id;
+    if (_liked.contains(id)) return;
+    setState(() => _liked.add(id));
+    _send("\u2764\uFE0F");
+  }
 
   Instant get _current => widget.instants[_index];
 
@@ -53,7 +98,13 @@ class _InstantViewerPageState extends ConsumerState<InstantViewerPage> {
       background: const Color(0xFF000000),
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-        onTap: _next,
+        onTap: () {
+          if (_replyFocus.hasFocus) {
+            _replyFocus.unfocus();
+          } else {
+            _next();
+          }
+        },
         onVerticalDragEnd: (d) {
           if ((d.primaryVelocity ?? 0) > 300) Navigator.of(context).maybePop();
         },
@@ -123,7 +174,65 @@ class _InstantViewerPageState extends ConsumerState<InstantViewerPage> {
                     : "You can only view an instant once",
                 style: const TextStyle(color: Color(0xFFA8A8A8), fontSize: 13),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              // Reply / heart, sent to them as a message.
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  12,
+                  0,
+                  8,
+                  12 + MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: CupertinoTextField(
+                        controller: _reply,
+                        focusNode: _replyFocus,
+                        placeholder: "Reply to ${instant.profile.username}...",
+                        placeholderStyle: const TextStyle(
+                          color: Color(0xCCFFFFFF),
+                        ),
+                        style: const TextStyle(color: Color(0xFFFFFFFF)),
+                        cursorColor: const Color(0xFFFFFFFF),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: const Color(0x99FFFFFF)),
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        onSubmitted: _send,
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.all(8),
+                      onPressed: _heart,
+                      child: Icon(
+                        _liked.contains(instant.id)
+                            ? CupertinoIcons.heart_fill
+                            : CupertinoIcons.heart,
+                        color: _liked.contains(instant.id)
+                            ? kIgRed
+                            : const Color(0xFFFFFFFF),
+                        size: 28,
+                        semanticLabel: "Like",
+                      ),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.all(8),
+                      onPressed: () => _send(_reply.text),
+                      child: const Icon(
+                        CupertinoIcons.paperplane,
+                        color: Color(0xFFFFFFFF),
+                        size: 26,
+                        semanticLabel: "Send",
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),

@@ -20,6 +20,7 @@ import "discover_people_page.dart";
 import "edit_profile_page.dart";
 import "follow_list_page.dart";
 import "note_sheets.dart";
+import "share_profile_page.dart";
 import "story_create_page.dart";
 import "story_viewer_page.dart";
 
@@ -310,14 +311,10 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   child: IgButton(
                     label: "Share profile",
                     expand: true,
-                    onTap: () {
-                      Clipboard.setData(
-                        ClipboardData(
-                          text: "instagram-replica://u/${profile.username}",
-                        ),
-                      );
-                      showToast(context, "Profile link copied");
-                    },
+                    onTap: () => pushFullscreen(
+                      context,
+                      ShareProfilePage(profile: profile),
+                    ),
                   ),
                 ),
               ] else ...[
@@ -427,13 +424,17 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
             )
           : PostGrid(posts: posts, scrollable: false);
     } else if (_tab == 1) {
-      content = empty(
-        CupertinoIcons.play_rectangle,
-        "No reels yet",
-        isMe
-            ? "Reels you share will appear here."
-            : "Reels ${profile.username} shares will appear here.",
-      );
+      // Reels tab: this account's video posts, in tall tiles.
+      final reels = posts.where((p) => p.isVideo).toList();
+      content = reels.isEmpty
+          ? empty(
+              CupertinoIcons.play_rectangle,
+              isMe ? "Share a moment with the world" : "No reels yet",
+              isMe
+                  ? "Post a video and it will appear here and in Reels."
+                  : "Reels ${profile.username} shares will appear here.",
+            )
+          : PostGrid(posts: reels, scrollable: false, aspectRatio: 9 / 16);
     } else {
       content = empty(
         CupertinoIcons.person_crop_square,

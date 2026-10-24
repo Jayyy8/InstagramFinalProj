@@ -126,17 +126,69 @@ final feedProvider = Provider<List<FeedPost>>((ref) {
   ];
 });
 
-/// Reels: videos only. Video posts from you and the people you follow
-/// first, then the sample channels' reels.
+/// Reels header: "Reels" (for you) or "Friends".
+enum ReelsMode { forYou, friends }
+
+class ReelsModeNotifier extends Notifier<ReelsMode> {
+  @override
+  ReelsMode build() => ReelsMode.forYou;
+
+  void set(ReelsMode mode) => state = mode;
+}
+
+final reelsModeProvider = NotifierProvider<ReelsModeNotifier, ReelsMode>(
+  ReelsModeNotifier.new,
+);
+
+/// Topics picked in the Reels filter (empty = everything).
+class ReelTopicsNotifier extends Notifier<Set<FeedCategory>> {
+  @override
+  Set<FeedCategory> build() => {};
+
+  void toggle(FeedCategory c) {
+    final next = {...state};
+    if (!next.remove(c)) next.add(c);
+    state = next;
+  }
+
+  void clear() => state = {};
+}
+
+final reelTopicsProvider =
+    NotifierProvider<ReelTopicsNotifier, Set<FeedCategory>>(
+      ReelTopicsNotifier.new,
+    );
+
+/// Reels: videos only. "Friends" shows videos of people you follow;
+/// "Reels" (for you) adds other public videos and the sample channels'
+/// reels, filtered by the topics you picked.
 final reelsProvider = Provider<List<FeedPost>>((ref) {
-  final ids = ref.watch(homeFeedProvider).valueOrNull ?? const [];
+  final mode = ref.watch(reelsModeProvider);
+  final topics = ref.watch(reelTopicsProvider);
   final cache = ref.watch(postCacheProvider);
-  final samples = ref.watch(samplePostsProvider);
-  return [
-    for (final id in ids)
+  final following = ref.watch(homeFeedProvider).valueOrNull ?? const [];
+  final friends = [
+    for (final id in following)
       if (cache[id] != null && cache[id]!.isVideo) cache[id]!,
-    ...samples.where((p) => p.isVideo),
   ];
+  if (mode == ReelsMode.friends) return friends;
+
+  final seen = {for (final p in friends) p.id};
+  final explore = ref.watch(explorePostIdsProvider).valueOrNull ?? const [];
+  final others = [
+    for (final id in explore)
+      if (cache[id] != null && cache[id]!.isVideo && !seen.contains(id))
+        cache[id]!,
+  ];
+  final samples = ref
+      .watch(samplePostsProvider)
+      .where(
+        (p) =>
+            p.isVideo &&
+            (topics.isEmpty ||
+                (p.category != null && topics.contains(p.category))),
+      );
+  return [...friends, ...others, ...samples];
 });
 
 /// Posts of a sample channel, for its profile grid.
@@ -162,7 +214,7 @@ final userPostIdsProvider = FutureProvider.autoDispose
           _cacheIds(ref, ref.watch(repositoryProvider).userPosts(userId)),
     );
 
-final explorePostIdsProvider = FutureProvider.autoDispose<List<String>>(
+final explorePostIdsProvider = FutureProvider<List<String>>(
   (ref) => _cacheIds(ref, ref.watch(repositoryProvider).explorePosts()),
 );
 

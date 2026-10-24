@@ -8,10 +8,13 @@ import "../../providers/chat_provider.dart";
 import "../../providers/notes_provider.dart";
 import "../../providers/social_providers.dart";
 import "../../theme/app_theme.dart";
-import "../../widgets/android_bars.dart";
+import "../../widgets/feed_image.dart";
 import "../../widgets/dialogs.dart";
 import "../../widgets/gradient_avatar.dart";
+import "../../widgets/follow_button.dart";
+import "../../widgets/post_actions.dart";
 import "../chat_page.dart";
+import "../discover_people_page.dart";
 import "../instant_camera_page.dart";
 import "../instant_viewer_page.dart";
 import "../note_sheets.dart";
@@ -166,6 +169,12 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
               );
             },
           ),
+          if (q.isEmpty)
+            SliverToBoxAdapter(
+              child: _InboxSuggestions(
+                chattingWith: {for (final c in real) c.partner.id},
+              ),
+            ),
           SliverToBoxAdapter(child: SizedBox(height: bottomBarInset(context))),
         ],
       ),
@@ -175,7 +184,12 @@ class _MessagesTabState extends ConsumerState<MessagesTab> {
       children: [
         Positioned.fill(child: list),
         // Instants tab on the right edge, like Instagram.
-        const Align(alignment: Alignment(1, 0.35), child: _InstantsTab()),
+        // Instants card on the right edge, like Instagram.
+        const Positioned(
+          right: 0,
+          bottom: 150,
+          child: ClipRect(child: _InstantsTab()),
+        ),
       ],
     );
   }
@@ -188,8 +202,9 @@ String _bubbleText(Note n) {
   return "${n.body}\n\u266B ${music.title}";
 }
 
-/// Right-edge tab: friends' unopened instants (tap to view once) and "+"
-/// to send one.
+/// Instants card peeking in from the right edge, like Instagram: the
+/// newest unopened instant with a red dot (tap to view them once), or a
+/// grey "+" card to take one. Swipe it left to open it too.
 class _InstantsTab extends ConsumerWidget {
   const _InstantsTab();
 
@@ -197,89 +212,270 @@ class _InstantsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = AppColors.of(context);
     final instants = ref.watch(instantsProvider).valueOrNull ?? const [];
-    // One avatar per person, newest senders first.
-    final senders = <String, Instant>{};
-    for (final i in instants.reversed) {
-      senders.putIfAbsent(i.profile.id, () => i);
-    }
-    final faces = senders.values.take(2).toList();
+    final latest = instants.isEmpty ? null : instants.last;
 
-    return Container(
-      width: 58,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      decoration: BoxDecoration(
-        color: colors.dark ? const Color(0xFF262626) : const Color(0xFFEFEFEF),
-        borderRadius: const BorderRadius.horizontal(left: Radius.circular(22)),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 10)],
+    void open() {
+      if (instants.isNotEmpty) {
+        pushFullscreen(context, InstantViewerPage(instants: List.of(instants)));
+      } else {
+        pushFullscreen(context, const InstantCameraPage());
+      }
+    }
+
+    const shape = ContinuousRectangleBorder(
+      borderRadius: BorderRadius.all(Radius.circular(44)),
+    );
+
+    final card = Container(
+      width: 92,
+      height: 124,
+      decoration: ShapeDecoration(
+        shape: shape,
+        color: colors.dark ? const Color(0xFF262626) : const Color(0xFFE9E9EE),
+        shadows: const [BoxShadow(color: Color(0x33000000), blurRadius: 10)],
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (instants.isNotEmpty) ...[
-            Semantics(
-              button: true,
-              label: "${instants.length} new instants",
-              child: GestureDetector(
-                onTap: () => pushFullscreen(
-                  context,
-                  InstantViewerPage(instants: List.of(instants)),
-                ),
-                child: Badged(
-                  count: instants.length,
-                  child: SizedBox(
-                    width: 40,
-                    height: 40.0 + (faces.length - 1) * 14,
-                    child: Stack(
-                      children: [
-                        for (int i = 0; i < faces.length; i++)
-                          Positioned(
-                            top: i * 14.0,
-                            left: 0,
-                            child: Container(
-                              padding: const EdgeInsets.all(2),
-                              decoration: const BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  begin: Alignment.bottomLeft,
-                                  end: Alignment.topRight,
-                                  colors: kStoryRingColors,
-                                ),
-                              ),
-                              child: GradientAvatar(
-                                name: faces[i].profile.username,
-                                imageUrls: faces[i].profile.avatarUrls,
-                                size: 36,
-                                ring: false,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-          Semantics(
-            button: true,
-            label: "New instant",
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => pushFullscreen(context, const InstantCameraPage()),
-              child: SizedBox(
-                width: 58,
-                height: 48,
+      child: ClipPath(
+        clipper: const ShapeBorderClipper(shape: shape),
+        child: latest != null
+            ? FeedImage(urls: [latest.mediaUrl])
+            : Align(
+                alignment: const Alignment(-0.55, 0),
                 child: Icon(
                   CupertinoIcons.add,
-                  size: 30,
+                  size: 28,
                   color: colors.secondaryText,
                 ),
               ),
+      ),
+    );
+
+    return Semantics(
+      button: true,
+      label: latest != null
+          ? "${instants.length} new instants from ${latest.profile.username}"
+          : "New instant",
+      child: GestureDetector(
+        onTap: open,
+        onLongPress: () => pushFullscreen(context, const InstantCameraPage()),
+        onHorizontalDragEnd: (d) {
+          if ((d.primaryVelocity ?? 0) < -150) open();
+        },
+        child: SizedBox(
+          // Only the left part of the card shows; the rest is off screen.
+          width: 50,
+          height: 124,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Positioned(left: 0, top: 0, child: card),
+              if (latest != null)
+                Positioned(
+                  left: 2,
+                  top: 10,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: kIgRed,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: colors.background, width: 1.5),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Below the chats, like Instagram: people you follow but haven't
+/// messaged ("Tap to chat"), then accounts to follow.
+class _InboxSuggestions extends ConsumerStatefulWidget {
+  final Set<String> chattingWith;
+
+  const _InboxSuggestions({required this.chattingWith});
+
+  @override
+  ConsumerState<_InboxSuggestions> createState() => _InboxSuggestionsState();
+}
+
+class _InboxSuggestionsState extends ConsumerState<_InboxSuggestions> {
+  /// Accounts dismissed with ✕ (until the app restarts).
+  final Set<String> _dismissed = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = AppColors.of(context);
+    final me = ref.watch(currentUserIdProvider);
+    final followingList = me == null
+        ? const <Profile>[]
+        : (ref.watch(followingListProvider(me)).valueOrNull ?? const []);
+    final followingIds = ref.watch(followingProvider).valueOrNull ?? const {};
+    final suggested =
+        ref.watch(suggestedProfilesProvider).valueOrNull ?? const [];
+
+    final tapToChat = followingList
+        .where((p) => !widget.chattingWith.contains(p.id))
+        .take(6)
+        .toList();
+    final toFollow = suggested
+        .where((p) => !_dismissed.contains(p.id))
+        .take(8)
+        .toList();
+
+    Widget header(String title, {VoidCallback? seeAll}) => Padding(
+      padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
+      child: Row(
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: colors.text,
             ),
           ),
+          const Spacer(),
+          if (seeAll != null)
+            GestureDetector(
+              onTap: seeAll,
+              child: const Text(
+                "See all",
+                style: TextStyle(
+                  color: kIgBlue,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
         ],
       ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (tapToChat.isNotEmpty) ...[
+          header("Suggestions"),
+          for (final p in tapToChat)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => push(context, ChatPage(partner: p)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    GradientAvatar(
+                      name: p.username,
+                      imageUrls: p.avatarUrls,
+                      size: 56,
+                      ring: false,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.displayName,
+                            style: TextStyle(fontSize: 14, color: colors.text),
+                          ),
+                          Text(
+                            "Tap to chat",
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+        if (toFollow.isNotEmpty) ...[
+          header(
+            "Accounts to follow",
+            seeAll: () => push(context, const DiscoverPeoplePage()),
+          ),
+          for (final p in toFollow)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => openProfile(context, p),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 6, 8),
+                child: Row(
+                  children: [
+                    GradientAvatar(
+                      name: p.username,
+                      imageUrls: p.avatarUrls,
+                      size: 56,
+                      ring: false,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.username,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: colors.text,
+                            ),
+                          ),
+                          Text(
+                            p.fullName.isNotEmpty
+                                ? p.fullName
+                                : "Suggested for you",
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: colors.secondaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    FollowButton(
+                      following: followingIds.contains(p.id),
+                      onTap: () => ref
+                          .read(followingProvider.notifier)
+                          .toggle(p.id)
+                          .catchError((Object e) {
+                            if (context.mounted) {
+                              showToast(context, errorText(e), error: true);
+                            }
+                          }),
+                    ),
+                    CupertinoButton(
+                      padding: const EdgeInsets.all(6),
+                      minimumSize: const Size(32, 32),
+                      onPressed: () => setState(() => _dismissed.add(p.id)),
+                      child: Icon(
+                        CupertinoIcons.xmark,
+                        size: 16,
+                        color: colors.secondaryText,
+                        semanticLabel: "Dismiss",
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ],
     );
   }
 }

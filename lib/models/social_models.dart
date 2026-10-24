@@ -379,6 +379,9 @@ class Message {
     if (contextType == "note_reply") {
       return mine ? "You replied to their note" : "Replied to your note";
     }
+    if (contextType == "instant_reply") {
+      return mine ? "You replied to their instant" : "Replied to your instant";
+    }
     if (contextType == "post_share") {
       return mine ? "You sent a post" : "Sent a post";
     }

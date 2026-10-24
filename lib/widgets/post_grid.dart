@@ -58,13 +58,33 @@ class PostTile extends StatelessWidget {
           else
             FeedImage(urls: post.cover),
           if (post.isVideo)
-            const Positioned(
-              top: 6,
-              right: 6,
-              child: Icon(
-                CupertinoIcons.play_rectangle_fill,
-                size: 16,
-                color: Color(0xFFFFFFFF),
+            // Play count, like Instagram's reel tiles.
+            Positioned(
+              left: 6,
+              bottom: 6,
+              child: Row(
+                children: [
+                  const Icon(
+                    CupertinoIcons.play_fill,
+                    size: 13,
+                    color: Color(0xFFFFFFFF),
+                    shadows: [Shadow(color: Color(0x99000000), blurRadius: 4)],
+                  ),
+                  const SizedBox(width: 3),
+                  Text(
+                    compactCount(
+                      post.remote ? post.likes * 4 + 12 : post.baseLikes * 9,
+                    ),
+                    style: const TextStyle(
+                      color: Color(0xFFFFFFFF),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      shadows: [
+                        Shadow(color: Color(0x99000000), blurRadius: 4),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             )
           else if (post.photos.length > 1)

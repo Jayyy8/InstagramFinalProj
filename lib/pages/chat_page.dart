@@ -723,12 +723,18 @@ class _Bubble extends StatelessWidget {
     }
 
     // What this message replies to / shares.
-    if (m.contextType == "story_reply" || m.contextType == "note_reply") {
+    if (m.contextType == "story_reply" ||
+        m.contextType == "note_reply" ||
+        m.contextType == "instant_reply") {
       children.add(
         Padding(
           padding: const EdgeInsets.only(bottom: 4),
           child: Text(
-            m.contextType == "story_reply"
+            m.contextType == "instant_reply"
+                ? (mine
+                      ? "You replied to their instant"
+                      : "Replied to your instant")
+                : m.contextType == "story_reply"
                 ? (mine
                       ? "You replied to their story"
                       : "Replied to your story")

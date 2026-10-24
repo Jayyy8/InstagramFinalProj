@@ -16,6 +16,9 @@ class IgTopBar extends StatelessWidget implements PreferredSizeWidget {
   /// Show a back arrow when the page can go back (and [leading] is null).
   final bool automaticBack;
 
+  /// Bar color (default: the page background). Reels uses black.
+  final Color? background;
+
   const IgTopBar({
     super.key,
     this.leading,
@@ -23,6 +26,7 @@ class IgTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.actions = const [],
     this.centerTitle = false,
     this.automaticBack = true,
+    this.background,
   });
 
   /// Bar built from an [AdaptiveAppBar]'s title and actions.
@@ -97,7 +101,7 @@ class IgTopBar extends StatelessWidget implements PreferredSizeWidget {
             : null);
 
     return ColoredBox(
-      color: colors.background,
+      color: background ?? colors.background,
       child: SafeArea(
         bottom: false,
         child: SizedBox(
