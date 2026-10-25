@@ -101,13 +101,55 @@ class StoryOverlay {
     "size": size,
   };
 
-  StoryOverlay copyWith({String? text, int? color, double? x, double? y}) {
+  StoryOverlay copyWith({
+    String? text,
+    int? color,
+    double? x,
+    double? y,
+    double? size,
+  }) {
     return StoryOverlay(
       text: text ?? this.text,
       color: color ?? this.color,
       x: x ?? this.x,
       y: y ?? this.y,
-      size: size,
+      size: size ?? this.size,
+    );
+  }
+}
+
+/// Where a story's location sticker sits and how big it is. Saved as an
+/// entry with "kind": "location" in the story's overlays.
+class LocationSticker {
+  /// Center of the sticker, as fractions of the story's width / height.
+  final double x;
+  final double y;
+  final double scale;
+
+  const LocationSticker({this.x = 0.5, this.y = 0.19, this.scale = 1});
+
+  static const String kind = "location";
+
+  static bool isEntry(Object? map) => map is Map && map["kind"] == kind;
+
+  factory LocationSticker.fromMap(Map map) => LocationSticker(
+    x: (map["x"] as num?)?.toDouble() ?? 0.5,
+    y: (map["y"] as num?)?.toDouble() ?? 0.19,
+    scale: (map["scale"] as num?)?.toDouble() ?? 1,
+  );
+
+  Map<String, dynamic> toMap() => {
+    "kind": kind,
+    "x": x,
+    "y": y,
+    "scale": scale,
+  };
+
+  LocationSticker copyWith({double? x, double? y, double? scale}) {
+    return LocationSticker(
+      x: x ?? this.x,
+      y: y ?? this.y,
+      scale: scale ?? this.scale,
     );
   }
 }
@@ -292,6 +334,7 @@ class StorySlide {
   final int durationMs;
   final DateTime createdAt;
   final String? location;
+  final LocationSticker locationSticker;
   final Music? music;
   final MusicSticker musicSticker;
   final Audience audience;
@@ -309,6 +352,7 @@ class StorySlide {
     this.durationMs = 5000,
     this.remote = false,
     this.location,
+    this.locationSticker = const LocationSticker(),
     this.music,
     this.musicSticker = const MusicSticker(),
     this.audience = Audience.public,
@@ -329,8 +373,14 @@ class StorySlide {
       videoUrl: type == "video" ? url : null,
       overlays: [
         for (final o in overlays)
-          StoryOverlay.fromMap(Map<String, dynamic>.from(o as Map)),
+          if (!LocationSticker.isEntry(o))
+            StoryOverlay.fromMap(Map<String, dynamic>.from(o as Map)),
       ],
+      locationSticker: overlays.where(LocationSticker.isEntry).isEmpty
+          ? const LocationSticker()
+          : LocationSticker.fromMap(
+              overlays.firstWhere(LocationSticker.isEntry) as Map,
+            ),
       durationMs: (map["duration_ms"] as num?)?.toInt() ?? 5000,
       createdAt: _date(map["created_at"]),
       remote: true,

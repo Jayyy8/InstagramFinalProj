@@ -426,6 +426,34 @@ void main() {
       expect(old.clipMs, 15000);
     });
 
+    test("location sticker place is kept apart from the story's texts", () {
+      final slide = StorySlide.fromMap({
+        "id": "s1",
+        "media_url": "https://example.com/a.jpg",
+        "created_at": "2026-10-25T00:00:00Z",
+        "location": "Arayat, Pampanga",
+        "overlays": [
+          const StoryOverlay(text: "Hi", size: 40).toMap(),
+          const LocationSticker(x: 0.3, y: 0.6, scale: 1.8).toMap(),
+        ],
+      });
+      expect(slide.overlays.length, 1);
+      expect(slide.overlays.first.text, "Hi");
+      expect(slide.locationSticker.x, 0.3);
+      expect(slide.locationSticker.y, 0.6);
+      expect(slide.locationSticker.scale, 1.8);
+
+      // Older stories: the sticker keeps its old spot near the top.
+      final old = StorySlide.fromMap({
+        "id": "s2",
+        "media_url": "https://example.com/b.jpg",
+        "created_at": "2026-10-25T00:00:00Z",
+        "location": "Manila",
+      });
+      expect(old.locationSticker.y, 0.19);
+      expect(old.locationSticker.scale, 1);
+    });
+
     test("song length is shown as m:ss", () {
       const m = Music(
         title: "T",

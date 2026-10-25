@@ -663,6 +663,7 @@ class SocialRepository {
     required List<StoryOverlay> overlays,
     required int durationMs,
     String? location,
+    LocationSticker place = const LocationSticker(),
     Music? music,
     MusicSticker sticker = const MusicSticker(),
     Audience audience = Audience.public,
@@ -672,7 +673,11 @@ class SocialRepository {
       "user_id": me,
       "media_url": url,
       "media_type": video ? "video" : "image",
-      "overlays": [for (final o in overlays) o.toMap()],
+      "overlays": [
+        for (final o in overlays) o.toMap(),
+        // Where the location sticker sits (no extra column needed).
+        if (location != null && location.isNotEmpty) place.toMap(),
+      ],
       "duration_ms": durationMs,
       "location": ?location,
       if (music != null)

@@ -547,16 +547,25 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
                                 child: StoryOverlayText(overlay: o),
                               ),
                             ),
+                          // Where the owner put the location sticker.
                           if (slide.location != null &&
                               slide.location!.isNotEmpty)
                             Positioned(
-                              top: box.maxHeight * 0.16,
-                              left: 24,
-                              right: 24,
+                              left: slide.locationSticker.x * box.maxWidth,
+                              top: slide.locationSticker.y * box.maxHeight,
                               child: IgnorePointer(
-                                child: Center(
-                                  child: LocationChip(
-                                    location: slide.location!,
+                                child: FractionalTranslation(
+                                  translation: const Offset(-0.5, -0.5),
+                                  child: Transform.scale(
+                                    scale: slide.locationSticker.scale,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: box.maxWidth * 0.8,
+                                      ),
+                                      child: LocationChip(
+                                        location: slide.location!,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),

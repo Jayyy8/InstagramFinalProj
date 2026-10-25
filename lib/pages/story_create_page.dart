@@ -228,7 +228,17 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
 
   /// Where the song sticker sits (drag / pinch it), or hidden.
   MusicSticker _sticker = const MusicSticker();
-  double _stickerScaleStart = 1;
+
+  /// Where the location sticker sits and its size.
+  LocationSticker _place = const LocationSticker();
+
+  /// What a drag / pinch is moving: "music", "place" or "text:" + index.
+  String? _target;
+  double _targetStartSize = 1;
+  final GlobalKey _stackKey = GlobalKey();
+  final GlobalKey _musicKey = GlobalKey();
+  final GlobalKey _placeKey = GlobalKey();
+  final List<GlobalKey> _textKeys = [];
 
   /// The sticker editor is open (the story's own sticker hides meanwhile).
   bool _editingSticker = false;
@@ -377,6 +387,96 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
     );
   }
 
+  GlobalKey _textKey(int i) {
+    while (_textKeys.length <= i) {
+      _textKeys.add(GlobalKey());
+    }
+    return _textKeys[i];
+  }
+
+  /// Where a sticker is on the story, at its drawn size.
+  Rect? _rectOf(GlobalKey key, [double scale = 1]) {
+    final box = key.currentContext?.findRenderObject() as RenderBox?;
+    final stack = _stackKey.currentContext?.findRenderObject() as RenderBox?;
+    if (box == null || stack == null || !box.attached) return null;
+    final topLeft = box.localToGlobal(Offset.zero, ancestor: stack);
+    final rect = topLeft & box.size;
+    return Rect.fromCenter(
+      center: rect.center,
+      width: rect.width * scale,
+      height: rect.height * scale,
+    );
+  }
+
+  /// A finger (or two) went down: pick the sticker under them, or the
+  /// closest one for a pinch, like Instagram (pinching a small sticker
+  /// with both fingers on it is hard).
+  void _grab(Offset at, int fingers) {
+    final reach = fingers > 1 ? 90.0 : 14.0;
+    final candidates = <(String, Rect?)>[
+      for (int i = 0; i < _overlays.length; i++)
+        if (_editing != i && i < _textKeys.length)
+          ("text:$i", _rectOf(_textKeys[i])),
+      if (_location != null) ("place", _rectOf(_placeKey, _place.scale)),
+      if (_music != null && !_sticker.hidden)
+        ("music", _rectOf(_musicKey, _sticker.scale)),
+    ];
+    String? best;
+    var bestDistance = double.infinity;
+    for (final (id, rect) in candidates) {
+      if (rect == null || !rect.inflate(reach).contains(at)) continue;
+      final d = (rect.center - at).distance;
+      if (d < bestDistance) {
+        bestDistance = d;
+        best = id;
+      }
+    }
+    _target = best;
+    if (best == "music") {
+      _targetStartSize = _sticker.scale;
+    } else if (best == "place") {
+      _targetStartSize = _place.scale;
+    } else if (best != null) {
+      _targetStartSize = _overlays[int.parse(best.substring(5))].size;
+    }
+  }
+
+  void _move(ScaleUpdateDetails d, Size size) {
+    final target = _target;
+    if (target == null) return;
+    final dx = d.focalPointDelta.dx / size.width;
+    final dy = d.focalPointDelta.dy / size.height;
+    final pinch = d.pointerCount > 1;
+    setState(() {
+      if (target == "music") {
+        _sticker = _sticker.copyWith(
+          x: (_sticker.x + dx).clamp(0.08, 0.92),
+          y: (_sticker.y + dy).clamp(0.06, 0.94),
+          scale: pinch
+              ? (_targetStartSize * d.scale).clamp(0.5, 2.8)
+              : _sticker.scale,
+        );
+      } else if (target == "place") {
+        _place = _place.copyWith(
+          x: (_place.x + dx).clamp(0.08, 0.92),
+          y: (_place.y + dy).clamp(0.04, 0.96),
+          scale: pinch
+              ? (_targetStartSize * d.scale).clamp(0.5, 3.0)
+              : _place.scale,
+        );
+      } else {
+        final i = int.parse(target.substring(5));
+        if (i >= _overlays.length) return;
+        final o = _overlays[i];
+        _overlays[i] = o.copyWith(
+          x: (o.x + dx).clamp(0.05, 0.95),
+          y: (o.y + dy).clamp(0.05, 0.95),
+          size: pinch ? (_targetStartSize * d.scale).clamp(14.0, 90.0) : o.size,
+        );
+      }
+    });
+  }
+
   Future<void> _pickLocation() async {
     final place = await askLocation(context, current: _location);
     if (place == null || !mounted) return;
@@ -419,6 +519,7 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
             overlays: _overlays,
             durationMs: duration,
             location: _location,
+            place: _place,
             music: _music,
             sticker: _sticker,
             audience: audience,
@@ -469,101 +570,87 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // ───── Media with draggable texts ─────
+          // ───── Media with stickers (drag to move, pinch to resize) ─────
           Positioned.fill(
             top: padding.top,
             bottom: padding.bottom + 72,
             child: ClipRRect(
               borderRadius: BorderRadius.circular(12),
               child: LayoutBuilder(
-                builder: (context, box) => Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    media,
-                    for (int i = 0; i < _overlays.length; i++)
-                      if (_editing != i)
+                builder: (context, box) => GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onScaleStart: (d) => _grab(d.localFocalPoint, d.pointerCount),
+                  onScaleUpdate: (d) => _move(d, box.biggest),
+                  onScaleEnd: (_) => _target = null,
+                  child: Stack(
+                    key: _stackKey,
+                    fit: StackFit.expand,
+                    children: [
+                      media,
+                      for (int i = 0; i < _overlays.length; i++)
+                        if (_editing != i)
+                          Positioned(
+                            left:
+                                _overlays[i].x * box.maxWidth -
+                                box.maxWidth / 2,
+                            width: box.maxWidth,
+                            top:
+                                _overlays[i].y * box.maxHeight -
+                                _overlays[i].size,
+                            child: Center(
+                              child: GestureDetector(
+                                key: _textKey(i),
+                                onTap: () => _startText(i),
+                                onLongPress: () =>
+                                    setState(() => _overlays.removeAt(i)),
+                                child: StoryOverlayText(overlay: _overlays[i]),
+                              ),
+                            ),
+                          ),
+                      if (_location != null)
                         Positioned(
-                          left:
-                              _overlays[i].x * box.maxWidth - box.maxWidth / 2,
-                          width: box.maxWidth,
-                          top:
-                              _overlays[i].y * box.maxHeight -
-                              _overlays[i].size,
-                          child: Center(
+                          left: _place.x * box.maxWidth,
+                          top: _place.y * box.maxHeight,
+                          child: FractionalTranslation(
+                            translation: const Offset(-0.5, -0.5),
                             child: GestureDetector(
-                              onTap: () => _startText(i),
-                              onLongPress: () =>
-                                  setState(() => _overlays.removeAt(i)),
-                              onPanUpdate: (d) => setState(() {
-                                final o = _overlays[i];
-                                _overlays[i] = o.copyWith(
-                                  x: (o.x + d.delta.dx / box.maxWidth).clamp(
-                                    0.05,
-                                    0.95,
+                              key: _placeKey,
+                              onTap: _pickLocation,
+                              child: Transform.scale(
+                                scale: _place.scale,
+                                child: ConstrainedBox(
+                                  constraints: BoxConstraints(
+                                    maxWidth: box.maxWidth * 0.8,
                                   ),
-                                  y: (o.y + d.delta.dy / box.maxHeight).clamp(
-                                    0.05,
-                                    0.95,
-                                  ),
-                                );
-                              }),
-                              child: StoryOverlayText(overlay: _overlays[i]),
+                                  child: LocationChip(location: _location!),
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                    if (_location != null)
-                      Positioned(
-                        top: box.maxHeight * 0.16,
-                        left: 24,
-                        right: 24,
-                        child: Center(
-                          child: LocationChip(
-                            location: _location!,
-                            onTap: _pickLocation,
-                          ),
-                        ),
-                      ),
-                    // Song sticker: drag to move, pinch to resize, tap for
-                    // the menu (change, hide, remove).
-                    if (_music != null && !_sticker.hidden && !_editingSticker)
-                      Positioned(
-                        left: _sticker.x * box.maxWidth,
-                        top: _sticker.y * box.maxHeight,
-                        child: FractionalTranslation(
-                          translation: const Offset(-0.5, -0.5),
-                          child: GestureDetector(
-                            onTap: _editSticker,
-                            onLongPress: _musicMenu,
-                            onScaleStart: (_) =>
-                                _stickerScaleStart = _sticker.scale,
-                            onScaleUpdate: (d) => setState(() {
-                              _sticker = _sticker.copyWith(
-                                x:
-                                    (_sticker.x +
-                                            d.focalPointDelta.dx / box.maxWidth)
-                                        .clamp(0.08, 0.92),
-                                y:
-                                    (_sticker.y +
-                                            d.focalPointDelta.dy /
-                                                box.maxHeight)
-                                        .clamp(0.06, 0.94),
-                                scale: d.pointerCount > 1
-                                    ? (_stickerScaleStart * d.scale).clamp(
-                                        0.6,
-                                        2.5,
-                                      )
-                                    : _sticker.scale,
-                              );
-                            }),
-                            child: MusicStickerView(
-                              music: _music!,
-                              sticker: _sticker,
-                              maxWidth: box.maxWidth,
+                      // Song sticker: tap for its editor, hold for the menu.
+                      if (_music != null &&
+                          !_sticker.hidden &&
+                          !_editingSticker)
+                        Positioned(
+                          left: _sticker.x * box.maxWidth,
+                          top: _sticker.y * box.maxHeight,
+                          child: FractionalTranslation(
+                            translation: const Offset(-0.5, -0.5),
+                            child: GestureDetector(
+                              key: _musicKey,
+                              onTap: _editSticker,
+                              onLongPress: _musicMenu,
+                              child: MusicStickerView(
+                                music: _music!,
+                                sticker: _sticker,
+                                maxWidth: box.maxWidth,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
