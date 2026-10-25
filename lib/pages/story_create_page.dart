@@ -223,6 +223,10 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
   int _color = _textColors.first;
   bool _uploading = false;
   Music? _music;
+
+  /// Where the song sticker sits (drag / pinch it), or hidden.
+  MusicSticker _sticker = const MusicSticker();
+  double _stickerScaleStart = 1;
   String? _location;
   final PreviewPlayer _preview = PreviewPlayer();
 
@@ -301,6 +305,19 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
           icon: CupertinoIcons.music_note,
           onTap: _pickMusic,
         ),
+        // Like Instagram: the song can play without its sticker.
+        SheetAction(
+          label: _sticker.hidden ? "Show sticker" : "Hide sticker",
+          icon: _sticker.hidden ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
+          onTap: () {
+            setState(
+              () => _sticker = _sticker.copyWith(hidden: !_sticker.hidden),
+            );
+            if (_sticker.hidden) {
+              showToast(context, "The song still plays without the sticker");
+            }
+          },
+        ),
         SheetAction(
           label: "Remove song",
           icon: CupertinoIcons.delete,
@@ -308,7 +325,10 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
           onTap: () {
             _preview.stop();
             _video?.setVolume(1);
-            setState(() => _music = null);
+            setState(() {
+              _music = null;
+              _sticker = const MusicSticker();
+            });
           },
         ),
       ],
@@ -358,6 +378,7 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
             durationMs: duration,
             location: _location,
             music: _music,
+            sticker: _sticker,
             audience: audience,
           );
       if (!mounted) return;
@@ -460,13 +481,43 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
                           ),
                         ),
                       ),
-                    if (_music != null)
+                    // Song sticker: drag to move, pinch to resize, tap for
+                    // the menu (change, hide, remove).
+                    if (_music != null && !_sticker.hidden)
                       Positioned(
-                        top: box.maxHeight * 0.7,
-                        left: 24,
-                        right: 24,
-                        child: Center(
-                          child: MusicChip(music: _music!, onTap: _musicMenu),
+                        left: _sticker.x * box.maxWidth,
+                        top: _sticker.y * box.maxHeight,
+                        child: FractionalTranslation(
+                          translation: const Offset(-0.5, -0.5),
+                          child: GestureDetector(
+                            onTap: _musicMenu,
+                            onScaleStart: (_) =>
+                                _stickerScaleStart = _sticker.scale,
+                            onScaleUpdate: (d) => setState(() {
+                              _sticker = _sticker.copyWith(
+                                x:
+                                    (_sticker.x +
+                                            d.focalPointDelta.dx / box.maxWidth)
+                                        .clamp(0.08, 0.92),
+                                y:
+                                    (_sticker.y +
+                                            d.focalPointDelta.dy /
+                                                box.maxHeight)
+                                        .clamp(0.06, 0.94),
+                                scale: d.pointerCount > 1
+                                    ? (_stickerScaleStart * d.scale).clamp(
+                                        0.6,
+                                        2.5,
+                                      )
+                                    : _sticker.scale,
+                              );
+                            }),
+                            child: MusicStickerView(
+                              music: _music!,
+                              sticker: _sticker,
+                              maxWidth: box.maxWidth,
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -492,8 +543,10 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
                   _RoundTool(label: "Aa", onTap: _startText),
                   const SizedBox(width: 8),
                   _RoundTool(
-                    semantics: "Add music",
+                    semantics: _music == null ? "Add music" : "Song options",
                     icon: CupertinoIcons.music_note_2,
+                    // Lit while a song is on (handy when its sticker is hidden).
+                    active: _music != null,
                     onTap: _music == null ? _pickMusic : _musicMenu,
                   ),
                   const SizedBox(width: 8),
@@ -778,12 +831,14 @@ class _RoundTool extends StatelessWidget {
   final String? label;
   final String? semantics;
   final VoidCallback onTap;
+  final bool active;
 
   const _RoundTool({
     this.icon,
     this.label,
     this.semantics,
     required this.onTap,
+    this.active = false,
   });
 
   @override
@@ -797,13 +852,19 @@ class _RoundTool extends StatelessWidget {
       child: Container(
         width: 42,
         height: 42,
-        decoration: const BoxDecoration(
-          color: Color(0x66000000),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFFFFFFF) : const Color(0x66000000),
           shape: BoxShape.circle,
         ),
         alignment: Alignment.center,
         child: icon != null
-            ? Icon(icon, color: const Color(0xFFFFFFFF), size: 22)
+            ? Icon(
+                icon,
+                color: active
+                    ? const Color(0xFF000000)
+                    : const Color(0xFFFFFFFF),
+                size: 22,
+              )
             : Text(
                 label ?? "",
                 style: const TextStyle(

@@ -161,6 +161,52 @@ class Music {
   }
 }
 
+/// Where a story's song sticker sits, how big it is, or that it's hidden
+/// (the song still plays). Saved inside the story's music as "sticker".
+class MusicSticker {
+  /// Center of the sticker, as fractions of the story's width / height.
+  final double x;
+  final double y;
+  final double scale;
+  final bool hidden;
+
+  const MusicSticker({
+    this.x = 0.5,
+    this.y = 0.72,
+    this.scale = 1,
+    this.hidden = false,
+  });
+
+  static MusicSticker fromJson(Object? music) {
+    final s = music is Map ? music["sticker"] : null;
+    if (s is! Map) return const MusicSticker();
+    double n(String key, double fallback) =>
+        (s[key] as num?)?.toDouble() ?? fallback;
+    return MusicSticker(
+      x: n("x", 0.5),
+      y: n("y", 0.72),
+      scale: n("scale", 1),
+      hidden: s["hidden"] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    "x": x,
+    "y": y,
+    "scale": scale,
+    "hidden": hidden,
+  };
+
+  MusicSticker copyWith({double? x, double? y, double? scale, bool? hidden}) {
+    return MusicSticker(
+      x: x ?? this.x,
+      y: y ?? this.y,
+      scale: scale ?? this.scale,
+      hidden: hidden ?? this.hidden,
+    );
+  }
+}
+
 /// One photo or video inside a story.
 class StorySlide {
   final String id;
@@ -173,6 +219,7 @@ class StorySlide {
   final DateTime createdAt;
   final String? location;
   final Music? music;
+  final MusicSticker musicSticker;
   final Audience audience;
 
   /// True when the slide is stored in Supabase (it can be viewed, liked,
@@ -189,6 +236,7 @@ class StorySlide {
     this.remote = false,
     this.location,
     this.music,
+    this.musicSticker = const MusicSticker(),
     this.audience = Audience.public,
   });
 
@@ -214,6 +262,7 @@ class StorySlide {
       remote: true,
       location: map["location"] as String?,
       music: Music.fromJson(map["music"]),
+      musicSticker: MusicSticker.fromJson(map["music"]),
       audience: Audience.fromKey(map["audience"]),
     );
   }

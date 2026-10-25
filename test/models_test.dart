@@ -396,6 +396,20 @@ void main() {
       expect(PostLink.fromJson(link.toJson())!.label, "example.com/page");
     });
 
+    test("story song sticker keeps its place, size and hidden state", () {
+      const sticker = MusicSticker(x: 0.3, y: 0.2, scale: 1.5, hidden: true);
+      final music = {"title": "T", "sticker": sticker.toJson()};
+      final back = MusicSticker.fromJson(music);
+      expect(back.x, 0.3);
+      expect(back.y, 0.2);
+      expect(back.scale, 1.5);
+      expect(back.hidden, isTrue);
+      // Stories saved before stickers could move: the old default spot.
+      final old = MusicSticker.fromJson({"title": "T"});
+      expect(old.y, 0.72);
+      expect(old.hidden, isFalse);
+    });
+
     test("song length is shown as m:ss", () {
       const m = Music(
         title: "T",

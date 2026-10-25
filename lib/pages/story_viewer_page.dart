@@ -553,14 +553,20 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
                                 ),
                               ),
                             ),
-                          if (slide.music != null)
+                          // Where the owner put the song sticker (unless
+                          // they hid it; the song plays either way).
+                          if (slide.music != null && !slide.musicSticker.hidden)
                             Positioned(
-                              top: box.maxHeight * 0.7,
-                              left: 24,
-                              right: 24,
+                              left: slide.musicSticker.x * box.maxWidth,
+                              top: slide.musicSticker.y * box.maxHeight,
                               child: IgnorePointer(
-                                child: Center(
-                                  child: MusicChip(music: slide.music!),
+                                child: FractionalTranslation(
+                                  translation: const Offset(-0.5, -0.5),
+                                  child: MusicStickerView(
+                                    music: slide.music!,
+                                    sticker: slide.musicSticker,
+                                    maxWidth: box.maxWidth,
+                                  ),
                                 ),
                               ),
                             ),

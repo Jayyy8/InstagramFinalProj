@@ -292,6 +292,9 @@ class StoryTopic {
   /// Song played over the stories (title, artist, preview URL, artwork).
   final List<String>? song;
 
+  /// Where the song's sticker sits on these stories.
+  final MusicSticker sticker;
+
   StoryTopic({
     required this.id,
     required this.label,
@@ -299,6 +302,7 @@ class StoryTopic {
     required this.channel,
     required this.photos,
     this.song,
+    this.sticker = const MusicSticker(),
   });
 }
 

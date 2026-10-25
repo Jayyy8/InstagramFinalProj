@@ -664,6 +664,7 @@ class SocialRepository {
     required int durationMs,
     String? location,
     Music? music,
+    MusicSticker sticker = const MusicSticker(),
     Audience audience = Audience.public,
   }) async {
     final url = await upload("stories", file);
@@ -674,7 +675,8 @@ class SocialRepository {
       "overlays": [for (final o in overlays) o.toMap()],
       "duration_ms": durationMs,
       "location": ?location,
-      "music": ?music?.toJson(),
+      if (music != null)
+        "music": {...music.toJson(), "sticker": sticker.toJson()},
       if (audience != Audience.public) "audience": audience.key,
     });
   }

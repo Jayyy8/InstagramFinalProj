@@ -56,6 +56,7 @@ List<StoryGroup> sampleStoryGroups() {
               imageUrls: topic.photos[i],
               createdAt: start.add(Duration(minutes: 20 * i)),
               music: songOf(topic),
+              musicSticker: topic.sticker,
               durationMs: topic.song != null ? 10000 : 5000,
             ),
         ],
@@ -94,6 +95,7 @@ class StoriesNotifier extends AsyncNotifier<List<StoryGroup>> {
     required int durationMs,
     String? location,
     Music? music,
+    MusicSticker sticker = const MusicSticker(),
     Audience audience = Audience.public,
   }) async {
     await ref
@@ -105,6 +107,7 @@ class StoriesNotifier extends AsyncNotifier<List<StoryGroup>> {
           durationMs: durationMs,
           location: location,
           music: music,
+          sticker: sticker,
           audience: audience,
         );
     await refresh();

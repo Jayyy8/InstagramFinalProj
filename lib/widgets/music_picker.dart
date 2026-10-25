@@ -375,6 +375,33 @@ class MusicChip extends StatelessWidget {
   }
 }
 
+/// The song sticker at its size, for the story editor and viewer.
+class MusicStickerView extends StatelessWidget {
+  final Music music;
+  final MusicSticker sticker;
+
+  /// Width of the story, so a long title doesn't run off it.
+  final double maxWidth;
+
+  const MusicStickerView({
+    super.key,
+    required this.music,
+    required this.sticker,
+    required this.maxWidth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.scale(
+      scale: sticker.scale,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth * 0.75),
+        child: MusicChip(music: music),
+      ),
+    );
+  }
+}
+
 /// "📍 Place" sticker for stories.
 class LocationChip extends StatelessWidget {
   final String location;

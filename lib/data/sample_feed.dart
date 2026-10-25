@@ -81,6 +81,7 @@ final List<StoryTopic> kStoryTopics = [
     category: FeedCategory.docs,
     channel: _docs,
     photos: kPhotoPool[FeedCategory.docs]!,
+    sticker: const MusicSticker(x: 0.5, y: 0.22, scale: 1.2),
     song: const [
       "Sunflower",
       "Post Malone & Swae Lee",
