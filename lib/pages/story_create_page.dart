@@ -16,6 +16,8 @@ import "../widgets/audience_picker.dart";
 import "../widgets/dialogs.dart";
 import "../widgets/gradient_avatar.dart";
 import "../widgets/music_picker.dart";
+import "../widgets/music_sticker.dart";
+import "music_sticker_editor.dart";
 import "story_viewer_page.dart";
 
 /// "Add to story": choose where the photo or video comes from.
@@ -227,6 +229,9 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
   /// Where the song sticker sits (drag / pinch it), or hidden.
   MusicSticker _sticker = const MusicSticker();
   double _stickerScaleStart = 1;
+
+  /// The sticker editor is open (the story's own sticker hides meanwhile).
+  bool _editingSticker = false;
   String? _location;
   final PreviewPlayer _preview = PreviewPlayer();
 
@@ -287,12 +292,57 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
     });
   }
 
+  /// Picks a song, then opens the sticker editor like Instagram. Cancel
+  /// there keeps the song you had before (or none).
   Future<void> _pickMusic() async {
     final music = await showMusicPicker(context);
     if (music == null || !mounted) return;
-    setState(() => _music = music);
+    final before = _music;
     _video?.setVolume(0);
-    await _preview.play(music.previewUrl);
+    final sticker = await _openStickerEditor(
+      music,
+      // A new song starts at the beginning; the sticker keeps its place.
+      _sticker.copyWith(startMs: 0),
+    );
+    if (!mounted) return;
+    if (sticker != null) {
+      setState(() {
+        _music = music;
+        _sticker = sticker;
+      });
+    } else if (before != null) {
+      _preview.play(
+        before.previewUrl,
+        start: Duration(milliseconds: _sticker.startMs),
+        length: Duration(milliseconds: _sticker.clipMs),
+      );
+    } else {
+      _preview.stop();
+      _video?.setVolume(1);
+    }
+  }
+
+  Future<MusicSticker?> _openStickerEditor(
+    Music music,
+    MusicSticker sticker,
+  ) async {
+    setState(() => _editingSticker = true);
+    final result = await editMusicSticker(
+      context,
+      music: music,
+      sticker: sticker,
+      player: _preview,
+    );
+    if (mounted) setState(() => _editingSticker = false);
+    return result;
+  }
+
+  /// Tap the sticker: style, color and clip again.
+  Future<void> _editSticker() async {
+    final music = _music;
+    if (music == null) return;
+    final sticker = await _openStickerEditor(music, _sticker);
+    if (sticker != null && mounted) setState(() => _sticker = sticker);
   }
 
   void _musicMenu() {
@@ -301,22 +351,14 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
       title: _music?.label,
       actions: [
         SheetAction(
+          label: _sticker.hidden ? "Show sticker" : "Edit sticker",
+          icon: CupertinoIcons.slider_horizontal_3,
+          onTap: _editSticker,
+        ),
+        SheetAction(
           label: "Change song",
           icon: CupertinoIcons.music_note,
           onTap: _pickMusic,
-        ),
-        // Like Instagram: the song can play without its sticker.
-        SheetAction(
-          label: _sticker.hidden ? "Show sticker" : "Hide sticker",
-          icon: _sticker.hidden ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
-          onTap: () {
-            setState(
-              () => _sticker = _sticker.copyWith(hidden: !_sticker.hidden),
-            );
-            if (_sticker.hidden) {
-              showToast(context, "The song still plays without the sticker");
-            }
-          },
         ),
         SheetAction(
           label: "Remove song",
@@ -368,7 +410,7 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
       // Photo stories with a song play for 15 seconds, like Instagram.
       final duration = widget.video
           ? length.inMilliseconds.clamp(1000, 60000)
-          : (_music != null ? 15000 : 5000);
+          : (_music != null ? _sticker.clipMs : 5000);
       await ref
           .read(storiesProvider.notifier)
           .add(
@@ -483,14 +525,15 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
                       ),
                     // Song sticker: drag to move, pinch to resize, tap for
                     // the menu (change, hide, remove).
-                    if (_music != null && !_sticker.hidden)
+                    if (_music != null && !_sticker.hidden && !_editingSticker)
                       Positioned(
                         left: _sticker.x * box.maxWidth,
                         top: _sticker.y * box.maxHeight,
                         child: FractionalTranslation(
                           translation: const Offset(-0.5, -0.5),
                           child: GestureDetector(
-                            onTap: _musicMenu,
+                            onTap: _editSticker,
+                            onLongPress: _musicMenu,
                             onScaleStart: (_) =>
                                 _stickerScaleStart = _sticker.scale,
                             onScaleUpdate: (d) => setState(() {
@@ -527,7 +570,7 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
           ),
 
           // ───── Top tools ─────
-          if (_editing == null)
+          if (_editing == null && !_editingSticker)
             Positioned(
               top: padding.top + 8,
               left: 8,
@@ -560,7 +603,7 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
             ),
 
           // ───── Bottom: who sees it, then share ─────
-          if (_editing == null)
+          if (_editing == null && !_editingSticker)
             Positioned(
               left: 12,
               right: 12,

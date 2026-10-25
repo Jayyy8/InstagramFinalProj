@@ -59,16 +59,35 @@ class PreviewPlayer {
   VideoPlayerController? _controller;
   String? _url;
 
+  /// The part of the preview that plays (a story's chosen clip).
+  Duration _start = Duration.zero;
+  Duration? _length;
+  bool _loop = true;
+
   String? get url => _url;
   bool get isPlaying => _controller?.value.isPlaying ?? false;
+  Duration get position => _controller?.value.position ?? Duration.zero;
 
-  Future<void> play(String url, {bool loop = true}) async {
+  /// Length of the whole preview (about 30 s), zero until it loads.
+  Duration get duration => _controller?.value.duration ?? Duration.zero;
+
+  /// Plays [url]; with [length], only from [start] to [start] + [length].
+  Future<void> play(
+    String url, {
+    bool loop = true,
+    Duration start = Duration.zero,
+    Duration? length,
+  }) async {
+    _loop = loop;
     if (_url == url && _controller != null) {
+      await setClip(start, length);
       await _controller!.play();
       return;
     }
     await stop();
     _url = url;
+    _start = start;
+    _length = length;
     final controller = VideoPlayerController.networkUrl(
       Uri.parse(url),
       videoPlayerOptions: kMixedAudio,
@@ -77,10 +96,37 @@ class PreviewPlayer {
     try {
       await controller.initialize();
       if (_controller != controller) return;
-      await controller.setLooping(loop);
+      controller.addListener(_keepInClip);
+      // A clip loops by itself; the whole preview loops in the player.
+      await controller.setLooping(loop && _length == null);
+      if (_start > Duration.zero) await controller.seekTo(_start);
       await controller.play();
     } catch (_) {
       // A preview that fails to load just stays silent.
+    }
+  }
+
+  /// Changes the part that plays and jumps to its start.
+  Future<void> setClip(Duration start, Duration? length) async {
+    _start = start;
+    _length = length;
+    final c = _controller;
+    if (c == null || !c.value.isInitialized) return;
+    await c.setLooping(_loop && length == null);
+    await c.seekTo(start);
+  }
+
+  void _keepInClip() {
+    final c = _controller;
+    final length = _length;
+    if (c == null || length == null || !c.value.isPlaying) return;
+    final end = _start + length;
+    if (c.value.position >= end || c.value.position < _start) {
+      if (_loop) {
+        c.seekTo(_start);
+      } else {
+        c.pause();
+      }
     }
   }
 
@@ -92,6 +138,7 @@ class PreviewPlayer {
     final c = _controller;
     _controller = null;
     _url = null;
+    c?.removeListener(_keepInClip);
     await c?.dispose();
   }
 }

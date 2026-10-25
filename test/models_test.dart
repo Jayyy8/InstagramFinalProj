@@ -404,10 +404,26 @@ void main() {
       expect(back.y, 0.2);
       expect(back.scale, 1.5);
       expect(back.hidden, isTrue);
+      final styled = MusicSticker.fromJson({
+        "sticker": const MusicSticker(
+          style: MusicStickerStyle.vinyl,
+          color: 2,
+          startMs: 9000,
+          clipMs: 20000,
+        ).toJson(),
+      });
+      expect(styled.style, MusicStickerStyle.vinyl);
+      expect(styled.color, 2);
+      expect(styled.startMs, 9000);
+      expect(styled.clipMs, 20000);
+      expect(const MusicSticker(color: 1).lightCard, isTrue);
+      expect(const MusicSticker().lightCard, isFalse);
       // Stories saved before stickers could move: the old default spot.
       final old = MusicSticker.fromJson({"title": "T"});
       expect(old.y, 0.72);
       expect(old.hidden, isFalse);
+      expect(old.style, MusicStickerStyle.card);
+      expect(old.clipMs, 15000);
     });
 
     test("song length is shown as m:ss", () {

@@ -18,6 +18,7 @@ import "../widgets/dialogs.dart";
 import "../widgets/feed_image.dart";
 import "../widgets/gradient_avatar.dart";
 import "../widgets/music_picker.dart";
+import "../widgets/music_sticker.dart";
 import "channel_profile_page.dart";
 import "profile_page.dart";
 import "story_create_page.dart";
@@ -221,9 +222,16 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
     _liked = false;
 
     if (slide.music != null) {
-      _audio.play(slide.music!.previewUrl).then((_) {
-        if (mounted && _shouldPause) _audio.pause();
-      });
+      // The part of the song the owner chose.
+      _audio
+          .play(
+            slide.music!.previewUrl,
+            start: Duration(milliseconds: slide.musicSticker.startMs),
+            length: Duration(milliseconds: slide.musicSticker.clipMs),
+          )
+          .then((_) {
+            if (mounted && _shouldPause) _audio.pause();
+          });
     }
 
     ref.read(seenStoriesProvider.notifier).markSeen(slide);
@@ -566,6 +574,7 @@ class _StoryGroupViewState extends ConsumerState<_StoryGroupView>
                                     music: slide.music!,
                                     sticker: slide.musicSticker,
                                     maxWidth: box.maxWidth,
+                                    spinning: !_shouldPause,
                                   ),
                                 ),
                               ),

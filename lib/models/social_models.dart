@@ -161,21 +161,74 @@ class Music {
   }
 }
 
-/// Where a story's song sticker sits, how big it is, or that it's hidden
-/// (the song still plays). Saved inside the story's music as "sticker".
+/// Looks of a story's song sticker, like Instagram's style buttons.
+enum MusicStickerStyle {
+  /// Cover, title and artist on a colored card.
+  card("card"),
+
+  /// Big square cover with the title under it.
+  cover("cover"),
+
+  /// Spinning vinyl record with the cover as its label.
+  vinyl("vinyl");
+
+  final String key;
+
+  const MusicStickerStyle(this.key);
+
+  static MusicStickerStyle fromKey(Object? key) => MusicStickerStyle.values
+      .firstWhere((s) => s.key == key, orElse: () => MusicStickerStyle.card);
+}
+
+/// A story's song sticker: where it sits, how big it is, its style and
+/// color, or that it's hidden ("Music only": the song still plays), plus the
+/// part of the song that plays. Saved inside the story's music as "sticker".
 class MusicSticker {
   /// Center of the sticker, as fractions of the story's width / height.
   final double x;
   final double y;
   final double scale;
   final bool hidden;
+  final MusicStickerStyle style;
+
+  /// Index into [colors].
+  final int color;
+
+  /// Where the clip starts in the 30-second preview, and how long it is.
+  final int startMs;
+  final int clipMs;
+
+  /// Card colors cycled with the color dot.
+  static const List<int> colors = [
+    0xCC000000,
+    0xFFFFFFFF,
+    0xFFE1306C,
+    0xFF4F5BD5,
+    0xFFFDCB5C,
+  ];
+
+  /// Clip lengths cycled with the round "15" button.
+  static const List<int> clipLengths = [15000, 20000, 30000];
 
   const MusicSticker({
     this.x = 0.5,
     this.y = 0.72,
     this.scale = 1,
     this.hidden = false,
+    this.style = MusicStickerStyle.card,
+    this.color = 0,
+    this.startMs = 0,
+    this.clipMs = 15000,
   });
+
+  int get colorValue => colors[color % colors.length];
+
+  /// Dark text on light cards.
+  bool get lightCard {
+    final c = colorValue;
+    final r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
+    return (c >> 24) > 0xE0 && (r * 299 + g * 587 + b * 114) / 1000 > 150;
+  }
 
   static MusicSticker fromJson(Object? music) {
     final s = music is Map ? music["sticker"] : null;
@@ -187,6 +240,10 @@ class MusicSticker {
       y: n("y", 0.72),
       scale: n("scale", 1),
       hidden: s["hidden"] == true,
+      style: MusicStickerStyle.fromKey(s["style"]),
+      color: (s["color"] as num?)?.toInt() ?? 0,
+      startMs: (s["start_ms"] as num?)?.toInt() ?? 0,
+      clipMs: (s["clip_ms"] as num?)?.toInt() ?? 15000,
     );
   }
 
@@ -195,14 +252,31 @@ class MusicSticker {
     "y": y,
     "scale": scale,
     "hidden": hidden,
+    "style": style.key,
+    "color": color,
+    "start_ms": startMs,
+    "clip_ms": clipMs,
   };
 
-  MusicSticker copyWith({double? x, double? y, double? scale, bool? hidden}) {
+  MusicSticker copyWith({
+    double? x,
+    double? y,
+    double? scale,
+    bool? hidden,
+    MusicStickerStyle? style,
+    int? color,
+    int? startMs,
+    int? clipMs,
+  }) {
     return MusicSticker(
       x: x ?? this.x,
       y: y ?? this.y,
       scale: scale ?? this.scale,
       hidden: hidden ?? this.hidden,
+      style: style ?? this.style,
+      color: color ?? this.color,
+      startMs: startMs ?? this.startMs,
+      clipMs: clipMs ?? this.clipMs,
     );
   }
 }
