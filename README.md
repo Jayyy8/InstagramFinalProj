@@ -71,7 +71,8 @@ imports in `lib/`), so it adapts to the phone it runs on:
    week). The accounts can't be logged in to; `supabase/seed_remove.sql`
    deletes them all. To change them, edit `tool/seed/generate_seed.py` and
    run `python tool/seed/generate_seed.py`.
-3. **Group members:** replace the placeholders in `lib/data/developers.dart`.
+3. **Group members:** names are in `lib/data/developers.dart`; add each
+   member's contributions there.
 4. `flutter pub get`
 
 ## Run on a phone

@@ -104,16 +104,18 @@ class DeveloperInfoPage extends StatelessWidget {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      "Contributions",
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: colors.text,
+                    if (dev.contributions.isNotEmpty) ...[
+                      const SizedBox(height: 10),
+                      Text(
+                        "Contributions",
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          color: colors.text,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 4),
+                      const SizedBox(height: 4),
+                    ],
                     for (final c in dev.contributions)
                       Padding(
                         padding: const EdgeInsets.only(top: 3),

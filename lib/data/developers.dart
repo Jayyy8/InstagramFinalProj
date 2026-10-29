@@ -1,7 +1,7 @@
 /// Group members shown in Settings → Developer info.
 ///
-/// TODO: replace these placeholders with your group's real names, roles and
-/// contributions before you present the project.
+/// Add each member's contributions to their list; members without any show
+/// just their name and role.
 class Developer {
   final String name;
   final String role;
@@ -23,39 +23,14 @@ const String kCourse = "Mobile Application Development";
 
 const List<Developer> kDevelopers = [
   Developer(
-    name: "Member 1 (Project Lead)",
-    role: "Project lead · Flutter developer",
-    contributions: [
-      "App architecture and Riverpod state management",
-      "Adaptive UI (adaptive_platform_ui) for iOS and Android",
-      "Home feed, stories and notes",
-    ],
+    name: "Tijano Tj Enriquez",
+    role: "Project leader",
+    contributions: [],
   ),
-  Developer(
-    name: "Member 2",
-    role: "Backend developer",
-    contributions: [
-      "Supabase database schema and row level security",
-      "Storage buckets for photos and videos",
-      "Realtime direct messages",
-    ],
-  ),
-  Developer(
-    name: "Member 3",
-    role: "Authentication developer",
-    contributions: [
-      "Registration with email code, login and logout",
-      "Login with a code and Sign in with Apple",
-      "Forgot password and change password",
-    ],
-  ),
-  Developer(
-    name: "Member 4",
-    role: "UI / UX designer",
-    contributions: [
-      "Instagram-style screens and layouts",
-      "Profile, edit profile and follow lists",
-      "Testing on iPhone and Android devices",
-    ],
-  ),
+  Developer(name: "Eingeline Trono", role: "Member", contributions: []),
+  Developer(name: "Kim Thea Bautista", role: "Member", contributions: []),
+  Developer(name: "Angela Pereyra", role: "Member", contributions: []),
+  Developer(name: "Novie Mae Tambiga", role: "Member", contributions: []),
+  Developer(name: "Marck Herrera", role: "Member", contributions: []),
+  Developer(name: "Keen Clever Latuna", role: "Member", contributions: []),
 ];
