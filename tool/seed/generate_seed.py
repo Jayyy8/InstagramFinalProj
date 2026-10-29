@@ -455,7 +455,11 @@ for a in ACCOUNTS:
             else:
                 cols.append("music")
                 vals.append(jb(song_json(song)))
-        w(f"insert into public.posts ({', '.join(cols)}) values ({', '.join(vals)}) on conflict (id) do nothing;")
+        # "Only if missing" works whatever constraints the table has.
+        w(
+            f"insert into public.posts ({', '.join(cols)}) select {', '.join(vals)} "
+            f"where not exists (select 1 from public.posts where id = {q(pid)});"
+        )
         all_posts.append((pid, a))
 w("")
 
@@ -488,9 +492,10 @@ for pid, author in all_posts:
     for j, fan in enumerate(rnd.sample(fans, rnd.randint(0, 4))):
         cid = uid("comment", pid, j)
         w(
-            "insert into public.comments (id, post_id, user_id, body, created_at) values "
-            f"({q(cid)}, {q(pid)}, {q(fan['id'])}, {q(rnd.choice(COMMENTS))}, "
-            f"now() - interval '{rnd.randint(1, 48)} hours') on conflict (id) do nothing;"
+            "insert into public.comments (id, post_id, user_id, body, created_at) select "
+            f"{q(cid)}, {q(pid)}, {q(fan['id'])}, {q(rnd.choice(COMMENTS))}, "
+            f"now() - interval '{rnd.randint(1, 48)} hours' "
+            f"where not exists (select 1 from public.comments where id = {q(cid)});"
         )
 w("")
 
@@ -515,11 +520,16 @@ for a in ACCOUNTS:
             if mtype == "image":
                 dur = 15000
         hours = rnd.randint(1, 20)
+        # Running the seed again moves the story back to "a few hours ago".
+        w(
+            f"update public.stories set created_at = now() - interval '{hours} hours', "
+            f"expires_at = now() + interval '7 days' where id = {q(sid)};"
+        )
         w(
             "insert into public.stories (id, user_id, media_url, media_type, duration_ms, music, created_at, expires_at) "
-            f"values ({q(sid)}, {q(a['id'])}, {q(media)}, {q(mtype)}, {dur}, {music}, "
-            f"now() - interval '{hours} hours', now() + interval '7 days') "
-            "on conflict (id) do update set created_at = excluded.created_at, expires_at = excluded.expires_at;"
+            f"select {q(sid)}, {q(a['id'])}, {q(media)}, {q(mtype)}, {dur}, {music}, "
+            f"now() - interval '{hours} hours', now() + interval '7 days' "
+            f"where not exists (select 1 from public.stories where id = {q(sid)});"
         )
 w("")
 
@@ -529,11 +539,12 @@ for i, p in enumerate(people):
     if i % 4 == 3:
         continue
     music = jb(song_json(rnd.choice(SONGS))) if rnd.random() < 0.4 else "null"
+    # One note per person: replace it (the app does the same).
+    w(f"delete from public.notes where user_id = {q(p['id'])};")
     w(
         "insert into public.notes (user_id, content, music, created_at, expires_at) values "
         f"({q(p['id'])}, {q(NOTES[i % len(NOTES)])}, {music}, now() - interval '{rnd.randint(1, 10)} hours', "
-        "now() + interval '7 days') on conflict (user_id) do update set content = excluded.content, "
-        "music = excluded.music, created_at = excluded.created_at, expires_at = excluded.expires_at;"
+        "now() + interval '7 days');"
     )
 
 w("")
