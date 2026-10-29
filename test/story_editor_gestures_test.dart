@@ -6,7 +6,7 @@ import "package:flutter_riverpod/flutter_riverpod.dart";
 import "package:flutter_test/flutter_test.dart";
 import "package:image_picker/image_picker.dart";
 import "package:oauth_activity/pages/story_create_page.dart";
-import "package:oauth_activity/pages/story_viewer_page.dart";
+import "package:oauth_activity/widgets/story_text.dart";
 import "package:oauth_activity/providers/social_providers.dart";
 
 /// A small PNG to put in the story editor.
@@ -94,5 +94,43 @@ void main() {
     await b2.up();
     await tester.pumpAndSettle();
     expect(fontSize(), lessThan(big * 0.8));
+  });
+
+  testWidgets("the text editor applies a font, background and alignment", (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1080, 2340);
+    tester.view.devicePixelRatio = 3;
+    addTearDown(tester.view.reset);
+
+    final path = (await tester.runAsync(_photo))!;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [currentUserIdProvider.overrideWithValue(null)],
+        child: CupertinoApp(
+          home: StoryEditorPage(file: XFile(path), video: false),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text("Aa").first);
+    await tester.pump();
+    await tester.enterText(find.byType(CupertinoTextField), "Styled");
+    // The font row is open first: pick Signature.
+    await tester.tap(find.text("Signature"));
+    await tester.tap(find.bySemanticsLabel("Text background"));
+    await tester.tap(find.bySemanticsLabel("Alignment"));
+    await tester.pump();
+    await tester.tap(find.text("Done"));
+    await tester.pumpAndSettle();
+
+    final placed = tester
+        .widget<StoryOverlayText>(find.byType(StoryOverlayText))
+        .overlay;
+    expect(placed.text, "Styled");
+    expect(placed.font, "signature");
+    expect(placed.background, 1);
+    expect(placed.align, 0);
   });
 }

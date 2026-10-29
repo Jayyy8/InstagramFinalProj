@@ -5,7 +5,8 @@ import "dart:ui" as ui;
 import "package:flutter/cupertino.dart";
 import "package:image_picker/image_picker.dart";
 
-/// Photo edits from the post editor (Filter, Edit, Ratio, Text, Overlay).
+/// Photo edits from the post editor (Filter, Edit, Ratio, Overlay). Texts
+/// are saved separately and drawn over the photo (see OverlayCanvas).
 /// They are previewed live with widgets and, when you share, drawn into the
 /// photo itself ([bakePhoto]) so everyone sees the edited version.
 
@@ -169,7 +170,6 @@ enum Adjustment {
 class PhotoEdit {
   PhotoFilter filter = PhotoFilter.normal;
   final Map<Adjustment, double> adjust = {};
-  final List<EditText> texts = [];
 
   /// A second photo placed on top ("Overlay").
   EditOverlay? overlay;
@@ -177,7 +177,6 @@ class PhotoEdit {
   bool get changed =>
       filter != PhotoFilter.normal ||
       adjust.values.any((v) => v != 0) ||
-      texts.isNotEmpty ||
       overlay != null;
 
   ColorMatrix get matrix {
@@ -191,35 +190,6 @@ class PhotoEdit {
       fade(v(Adjustment.fade)),
     ]);
   }
-}
-
-/// Text placed on a photo. Position and size are fractions of the photo's
-/// width / height, so the preview and the final photo match.
-class EditText {
-  String text;
-  Color color;
-  double x;
-  double y;
-
-  /// Font size as a fraction of the photo's width.
-  double size;
-
-  EditText({
-    required this.text,
-    this.color = const Color(0xFFFFFFFF),
-    this.x = 0.5,
-    this.y = 0.5,
-    this.size = 0.075,
-  });
-
-  TextStyle styleFor(double width) => TextStyle(
-    color: color,
-    fontSize: size * width,
-    fontWeight: FontWeight.w800,
-    height: 1.15,
-    decoration: TextDecoration.none,
-    shadows: const [Shadow(color: Color(0x66000000), blurRadius: 6)],
-  );
 }
 
 /// A photo on top of the photo. [width] is a fraction of the photo's width.
@@ -327,21 +297,6 @@ Future<XFile> bakePhoto(XFile source, PhotoEdit edit, PostRatio ratio) async {
     );
     canvas.restore();
     top.dispose();
-  }
-
-  for (final t in edit.texts) {
-    final painter = TextPainter(
-      text: TextSpan(text: t.text, style: t.styleFor(out.width)),
-      textAlign: TextAlign.center,
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: out.width * 0.9);
-    painter.paint(
-      canvas,
-      Offset(
-        out.width * t.x - painter.width / 2,
-        out.height * t.y - painter.height / 2,
-      ),
-    );
   }
 
   final picture = recorder.endRecording();

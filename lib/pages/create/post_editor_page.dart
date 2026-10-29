@@ -13,7 +13,9 @@ import "../../widgets/dialogs.dart";
 import "../../widgets/edited_photo.dart";
 import "../../widgets/feed_image.dart";
 import "../../widgets/music_picker.dart";
-import "../../widgets/post_video.dart";
+import "../../widgets/overlay_canvas.dart";
+import "../../widgets/text_editor.dart";
+import "../music_sticker_editor.dart";
 import "post_details_page.dart";
 
 /// One photo or video going into a post, with its edits.
@@ -21,9 +23,12 @@ class PostMedia {
   final XFile file;
   final bool video;
 
-  /// Width / height (photos); found when the editor opens if unknown.
+  /// Width / height; found when the editor opens if unknown.
   double? aspect;
   final PhotoEdit edit = PhotoEdit();
+
+  /// Texts on this photo / video (drawn on top, not into it).
+  final List<StoryOverlay> texts = [];
 
   PostMedia({required this.file, required this.video, this.aspect});
 }
@@ -62,16 +67,17 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
   bool _grid = false;
   Timer? _gridTimer;
 
-  /// Text being typed (null = not typing).
-  EditText? _typing;
-  final TextEditingController _text = TextEditingController();
-  Color _textColor = const Color(0xFFFFFFFF);
+  /// Index of the text being typed on this photo (-1 = new), null = not
+  /// typing.
+  int? _typing;
+
+  /// The song sticker on the first photo / the video: drag, pinch, tap.
+  MusicSticker _sticker = const MusicSticker(y: 0.78);
 
   /// The "Sharing posts" explainer is shown once per app run.
   static bool _explained = false;
 
   PostMedia get _current => _media[_index];
-  bool get _isVideo => _current.video;
 
   @override
   void initState() {
@@ -101,17 +107,52 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
     _player.stop();
     _pages.dispose();
     _gridTimer?.cancel();
-    _text.dispose();
     super.dispose();
   }
 
   // ───────────── Tools ─────────────
 
+  /// Picks a song, then opens the sticker editor (style, color, the part
+  /// that plays). Cancel keeps the song you had before.
   Future<void> _audio() async {
     final music = await showMusicPicker(context);
     if (music == null || !mounted) return;
-    setState(() => _music = music);
-    await _player.play(music.previewUrl);
+    final before = _music;
+    final sticker = await editMusicSticker(
+      context,
+      music: music,
+      sticker: _sticker.copyWith(startMs: 0),
+      player: _player,
+    );
+    if (!mounted) return;
+    if (sticker != null) {
+      setState(() {
+        _music = music;
+        _sticker = sticker;
+      });
+    } else if (before != null) {
+      _playClip(before);
+    } else {
+      _player.stop();
+    }
+  }
+
+  void _playClip(Music music) => _player.play(
+    music.previewUrl,
+    start: Duration(milliseconds: _sticker.startMs),
+    length: Duration(milliseconds: _sticker.clipMs),
+  );
+
+  Future<void> _editSticker() async {
+    final music = _music;
+    if (music == null) return;
+    final sticker = await editMusicSticker(
+      context,
+      music: music,
+      sticker: _sticker,
+      player: _player,
+    );
+    if (sticker != null && mounted) setState(() => _sticker = sticker);
   }
 
   void _audioMenu() {
@@ -124,6 +165,11 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
       context,
       title: music.label,
       actions: [
+        SheetAction(
+          label: _sticker.hidden ? "Show sticker" : "Edit sticker",
+          icon: CupertinoIcons.slider_horizontal_3,
+          onTap: _editSticker,
+        ),
         SheetAction(
           label: "Change song",
           icon: CupertinoIcons.music_note,
@@ -149,44 +195,29 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
       return;
     }
     setState(() => _music = s);
-    _player.play(s.previewUrl);
+    _playClip(s);
   }
 
-  bool _photoOnly(String tool) {
-    if (!_isVideo) return true;
-    showToast(context, "$tool works on photos");
-    return false;
-  }
+  void _startText([int? index]) => setState(() => _typing = index ?? -1);
 
-  void _startText([EditText? existing]) {
-    if (!_photoOnly("Text")) return;
+  void _finishText(StoryOverlay? text) {
+    final index = _typing;
+    final texts = _current.texts;
     setState(() {
-      _typing = existing ?? EditText(text: "");
-      _text.text = existing?.text ?? "";
-      _textColor = existing?.color ?? const Color(0xFFFFFFFF);
-    });
-  }
-
-  void _finishText() {
-    final t = _typing;
-    if (t == null) return;
-    final value = _text.text.trim();
-    setState(() {
-      final texts = _current.edit.texts;
-      if (value.isEmpty) {
-        texts.remove(t);
-      } else {
-        t
-          ..text = value
-          ..color = _textColor;
-        if (!texts.contains(t)) texts.add(t);
+      if (index != null && index >= 0) {
+        if (text == null) {
+          texts.removeAt(index);
+        } else {
+          texts[index] = text;
+        }
+      } else if (text != null) {
+        texts.add(text);
       }
       _typing = null;
     });
   }
 
   Future<void> _overlay() async {
-    if (!_photoOnly("Overlay")) return;
     if (_current.edit.overlay != null) {
       _overlayMenu();
       return;
@@ -220,7 +251,6 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
   }
 
   void _ratioTool() {
-    if (!_photoOnly("Ratio")) return;
     _gridTimer?.cancel();
     setState(() {
       _ratio = _ratio.next;
@@ -247,6 +277,7 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
           media: _media,
           ratio: _ratio,
           music: _music,
+          musicSticker: _sticker,
           reel: widget.reel,
         ),
       ),
@@ -283,7 +314,13 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
                 SizedBox(height: padding.bottom + 8),
               ],
             ),
-            if (_typing != null) _textEditor(padding),
+            if (_typing != null)
+              TextEditorOverlay(
+                initial: _typing! >= 0
+                    ? _current.texts[_typing!]
+                    : const StoryOverlay(text: ""),
+                onDone: _finishText,
+              ),
           ],
         ),
       ),
@@ -410,19 +447,7 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
       }),
       itemBuilder: (context, i) {
         final m = _media[i];
-        if (m.video) {
-          return Center(
-            child: AspectRatio(
-              aspectRatio: 9 / 16,
-              child: PostVideo(
-                key: ValueKey(m.file.path),
-                url: m.file.path,
-                autoplay: true,
-              ),
-            ),
-          );
-        }
-        final aspect = m.aspect;
+        final aspect = m.aspect ?? (m.video ? 9 / 16 : null);
         if (aspect == null) {
           return const Center(
             child: CupertinoActivityIndicator(color: Color(0xFFFFFFFF)),
@@ -436,10 +461,29 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
                 edit: m.edit,
                 ratio: _ratio,
                 aspect: aspect,
-                interactive: true,
-                onTextTap: _startText,
+                video: m.video,
+                // With a song, the song plays instead of the video's sound.
+                startMuted: _music != null,
+                onVideoAspect: (a) {
+                  if (m.aspect != a) setState(() => m.aspect = a);
+                },
                 onOverlayTap: _overlayMenu,
                 onChanged: () => setState(() {}),
+              ),
+              Positioned.fill(
+                child: OverlayCanvas(
+                  texts: m.texts,
+                  // The song sticker sits on the first photo / the video.
+                  music: i == 0 ? _music : null,
+                  sticker: _sticker,
+                  interactive: true,
+                  animate: false,
+                  onTextTap: _startText,
+                  onMusicTap: _editSticker,
+                  onTextChanged: (j, t) => setState(() => m.texts[j] = t),
+                  onStickerChanged: (s) => setState(() => _sticker = s),
+                  onFreeScale: (d, size) => _moveOverlayPhoto(m, d, size),
+                ),
               ),
               if (_grid && i == _index)
                 Positioned.fill(
@@ -452,28 +496,37 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
     );
   }
 
+  /// Drag / pinch on empty space moves the overlay photo, if there is one.
+  void _moveOverlayPhoto(PostMedia m, ScaleUpdateDetails d, Size size) {
+    final o = m.edit.overlay;
+    if (o == null) return;
+    setState(() {
+      o.x = (o.x + d.focalPointDelta.dx / size.width).clamp(0.0, 1.0);
+      o.y = (o.y + d.focalPointDelta.dy / size.height).clamp(0.0, 1.0);
+      if (d.pointerCount > 1 && d.scale != 1) {
+        o.width = (o.width * (1 + (d.scale - 1) * 0.05)).clamp(0.15, 0.95);
+      }
+    });
+  }
+
   Widget _toolRow() {
     final tools = <(IconData, String, VoidCallback, bool)>[
       (CupertinoIcons.music_note_2, "Audio", _audio, true),
-      (CupertinoIcons.textformat, "Text", () => _startText(), !_isVideo),
-      (CupertinoIcons.square_stack, "Overlay", _overlay, !_isVideo),
+      (CupertinoIcons.textformat, "Text", () => _startText(), true),
+      (CupertinoIcons.square_stack, "Overlay", _overlay, true),
       (
         CupertinoIcons.wand_stars,
         "Filter",
-        () {
-          if (_photoOnly("Filter")) setState(() => _panel = _Panel.filter);
-        },
-        !_isVideo,
+        () => setState(() => _panel = _Panel.filter),
+        true,
       ),
       (
         CupertinoIcons.slider_horizontal_3,
         "Edit",
-        () {
-          if (_photoOnly("Edit")) setState(() => _panel = _Panel.adjust);
-        },
-        !_isVideo,
+        () => setState(() => _panel = _Panel.adjust),
+        true,
       ),
-      (CupertinoIcons.crop, "Ratio", _ratioTool, !_isVideo),
+      (CupertinoIcons.crop, "Ratio", _ratioTool, true),
     ];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -710,12 +763,27 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
                         borderRadius: BorderRadius.circular(4),
                         child: ColorFiltered(
                           colorFilter: ColorFilter.matrix(f.matrix),
-                          child: Image.file(
-                            File(m.file.path),
-                            fit: BoxFit.cover,
-                            cacheWidth: 200,
-                            gaplessPlayback: true,
-                          ),
+                          child: m.video
+                              ? const DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [
+                                        Color(0xFF5DA9E9),
+                                        Color(0xFFF4D35E),
+                                        Color(0xFFEE964B),
+                                        Color(0xFF6B8F71),
+                                      ],
+                                    ),
+                                  ),
+                                )
+                              : Image.file(
+                                  File(m.file.path),
+                                  fit: BoxFit.cover,
+                                  cacheWidth: 200,
+                                  gaplessPlayback: true,
+                                ),
                         ),
                       ),
                     ),
@@ -812,97 +880,6 @@ class _PostEditorPageState extends ConsumerState<PostEditorPage> {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _textEditor(EdgeInsets padding) {
-    const swatches = [
-      Color(0xFFFFFFFF),
-      Color(0xFF000000),
-      Color(0xFF3897F0),
-      Color(0xFF70C050),
-      Color(0xFFFDCB5C),
-      Color(0xFFFD8D32),
-      Color(0xFFED4956),
-      Color(0xFFD10869),
-      Color(0xFFA307BA),
-    ];
-    return Positioned.fill(
-      child: GestureDetector(
-        onTap: _finishText,
-        child: ColoredBox(
-          color: const Color(0xB3000000),
-          child: Column(
-            children: [
-              SizedBox(height: padding.top + 6),
-              Align(
-                alignment: Alignment.centerRight,
-                child: CupertinoButton(
-                  onPressed: _finishText,
-                  child: const Text(
-                    "Done",
-                    style: TextStyle(
-                      color: Color(0xFFFFFFFF),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 17,
-                    ),
-                  ),
-                ),
-              ),
-              Expanded(
-                child: Center(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: CupertinoTextField(
-                      controller: _text,
-                      autofocus: true,
-                      maxLines: null,
-                      textAlign: TextAlign.center,
-                      cursorColor: _textColor,
-                      decoration: null,
-                      style: TextStyle(
-                        color: _textColor,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              SizedBox(
-                height: 44,
-                child: ListView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  children: [
-                    for (final c in swatches)
-                      GestureDetector(
-                        onTap: () => setState(() => _textColor = c),
-                        child: Container(
-                          width: 28,
-                          height: 28,
-                          margin: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: c,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: const Color(0xFFFFFFFF),
-                              width: c == _textColor ? 3 : 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-              SizedBox(height: MediaQuery.viewInsetsOf(context).bottom + 12),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

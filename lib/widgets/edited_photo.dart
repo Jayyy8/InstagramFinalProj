@@ -3,8 +3,9 @@ import "dart:io";
 import "package:flutter/cupertino.dart";
 
 import "../services/photo_editing.dart";
+import "post_video.dart";
 
-/// Live preview of a photo with its edits: the same crop, colors, texts and
+/// Live preview of a photo (or video) with its edits: the same crop, colors and
 /// overlay that [bakePhoto] draws into the shared photo.
 class EditedPhoto extends StatelessWidget {
   final String path;
@@ -14,11 +15,16 @@ class EditedPhoto extends StatelessWidget {
   /// Width / height of the photo itself (for [PostRatio.original]).
   final double aspect;
 
-  /// Lets you drag texts and the overlay (editor only).
+  /// Lets you drag the overlay photo (editor only).
   final bool interactive;
-  final ValueChanged<EditText>? onTextTap;
   final VoidCallback? onOverlayTap;
   final VoidCallback? onChanged;
+
+  /// [path] is a video: it plays with the filter and crop on top (a video
+  /// can't have them drawn into it).
+  final bool video;
+  final bool startMuted;
+  final ValueChanged<double>? onVideoAspect;
 
   const EditedPhoto({
     super.key,
@@ -27,9 +33,11 @@ class EditedPhoto extends StatelessWidget {
     required this.ratio,
     required this.aspect,
     this.interactive = false,
-    this.onTextTap,
     this.onOverlayTap,
     this.onChanged,
+    this.video = false,
+    this.startMuted = false,
+    this.onVideoAspect,
   });
 
   @override
@@ -46,14 +54,23 @@ class EditedPhoto extends StatelessWidget {
               clipBehavior: Clip.none,
               children: [
                 Positioned.fill(
-                  child: ColorFiltered(
-                    colorFilter: ColorFilter.matrix(edit.matrix),
-                    child: Image.file(
-                      File(path),
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                    ),
-                  ),
+                  child: video
+                      ? PostVideo(
+                          key: ValueKey(path),
+                          url: path,
+                          autoplay: true,
+                          startMuted: startMuted,
+                          colorMatrix: edit.matrix,
+                          onAspect: onVideoAspect,
+                        )
+                      : ColorFiltered(
+                          colorFilter: ColorFilter.matrix(edit.matrix),
+                          child: Image.file(
+                            File(path),
+                            fit: BoxFit.cover,
+                            gaplessPlayback: true,
+                          ),
+                        ),
                 ),
                 if (overlay != null)
                   _Placed(
@@ -86,29 +103,6 @@ class EditedPhoto extends StatelessWidget {
                             fit: BoxFit.fitWidth,
                             gaplessPlayback: true,
                           ),
-                        ),
-                      ),
-                    ),
-                  ),
-                for (final t in edit.texts)
-                  _Placed(
-                    x: t.x * w,
-                    y: t.y * h,
-                    child: GestureDetector(
-                      onTap: interactive ? () => onTextTap?.call(t) : null,
-                      onPanUpdate: interactive
-                          ? (d) {
-                              t.x = (t.x + d.delta.dx / w).clamp(0.0, 1.0);
-                              t.y = (t.y + d.delta.dy / h).clamp(0.0, 1.0);
-                              onChanged?.call();
-                            }
-                          : null,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: w * 0.9),
-                        child: Text(
-                          t.text,
-                          textAlign: TextAlign.center,
-                          style: t.styleFor(w),
                         ),
                       ),
                     ),

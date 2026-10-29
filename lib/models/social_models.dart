@@ -77,12 +77,28 @@ class StoryOverlay {
   final double y;
   final double size;
 
+  /// Style keys (see lib/widgets/story_text.dart): font, effect, animation.
+  final String font;
+  final String effect;
+  final String animation;
+
+  /// 0 left, 1 center, 2 right.
+  final int align;
+
+  /// 0 none, 1 solid box, 2 see-through box.
+  final int background;
+
   const StoryOverlay({
     required this.text,
     this.color = 0xFFFFFFFF,
     this.x = 0.5,
     this.y = 0.45,
     this.size = 28,
+    this.font = "classic",
+    this.effect = "none",
+    this.animation = "none",
+    this.align = 1,
+    this.background = 0,
   });
 
   factory StoryOverlay.fromMap(Map<String, dynamic> map) => StoryOverlay(
@@ -91,6 +107,11 @@ class StoryOverlay {
     x: (map["x"] as num?)?.toDouble() ?? 0.5,
     y: (map["y"] as num?)?.toDouble() ?? 0.45,
     size: (map["size"] as num?)?.toDouble() ?? 28,
+    font: (map["font"] as String?) ?? "classic",
+    effect: (map["effect"] as String?) ?? "none",
+    animation: (map["animation"] as String?) ?? "none",
+    align: (map["align"] as num?)?.toInt() ?? 1,
+    background: (map["background"] as num?)?.toInt() ?? 0,
   );
 
   Map<String, dynamic> toMap() => {
@@ -99,6 +120,11 @@ class StoryOverlay {
     "x": x,
     "y": y,
     "size": size,
+    "font": font,
+    "effect": effect,
+    "animation": animation,
+    "align": align,
+    "background": background,
   };
 
   StoryOverlay copyWith({
@@ -107,6 +133,11 @@ class StoryOverlay {
     double? x,
     double? y,
     double? size,
+    String? font,
+    String? effect,
+    String? animation,
+    int? align,
+    int? background,
   }) {
     return StoryOverlay(
       text: text ?? this.text,
@@ -114,6 +145,11 @@ class StoryOverlay {
       x: x ?? this.x,
       y: y ?? this.y,
       size: size ?? this.size,
+      font: font ?? this.font,
+      effect: effect ?? this.effect,
+      animation: animation ?? this.animation,
+      align: align ?? this.align,
+      background: background ?? this.background,
     );
   }
 }

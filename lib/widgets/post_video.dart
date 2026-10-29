@@ -16,12 +16,24 @@ class PostVideo extends StatefulWidget {
   /// Grid tiles: just the first frame, no controls.
   final bool thumbnail;
 
+  /// A filter / edits from the post editor (null = none).
+  final List<double>? colorMatrix;
+
+  /// Start without sound (a post with a song plays the song instead).
+  final bool startMuted;
+
+  /// Width / height of the video, once it has loaded.
+  final ValueChanged<double>? onAspect;
+
   const PostVideo({
     super.key,
     required this.url,
     this.autoplay = false,
     this.fit = BoxFit.cover,
     this.thumbnail = false,
+    this.colorMatrix,
+    this.startMuted = false,
+    this.onAspect,
   });
 
   @override
@@ -41,7 +53,7 @@ class _PostVideoState extends State<PostVideo> {
         );
   bool _ready = false;
   bool _failed = false;
-  bool _muted = false;
+  late bool _muted = widget.startMuted;
 
   @override
   void initState() {
@@ -51,6 +63,9 @@ class _PostVideoState extends State<PostVideo> {
         .then((_) {
           if (!mounted) return;
           _controller.setLooping(true);
+          if (_muted) _controller.setVolume(0);
+          final size = _controller.value.size;
+          if (size.height > 0) widget.onAspect?.call(size.width / size.height);
           setState(() => _ready = true);
           if (widget.autoplay && !widget.thumbnail && _onScreen) {
             _controller.play();
@@ -133,7 +148,7 @@ class _PostVideoState extends State<PostVideo> {
     }
     if (!_ready) return const Shimmer(child: Bone(radius: 0));
 
-    final video = ClipRect(
+    Widget video = ClipRect(
       child: FittedBox(
         fit: widget.fit,
         child: SizedBox(
@@ -143,6 +158,13 @@ class _PostVideoState extends State<PostVideo> {
         ),
       ),
     );
+    final matrix = widget.colorMatrix;
+    if (matrix != null) {
+      video = ColorFiltered(
+        colorFilter: ColorFilter.matrix(matrix),
+        child: video,
+      );
+    }
 
     if (widget.thumbnail) return video;
 

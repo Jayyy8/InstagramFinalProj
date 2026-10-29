@@ -12,7 +12,7 @@ imports in `lib/`), so it adapts to the phone it runs on:
 
 ## Features
 
-- **Auth:** register (email code), log in with password / code / Apple, forgot
+- **Auth:** register (email code), log in with password / code, forgot
   password, **change password** (Settings → Change password).
 - **Profile:** edit name, username, bio and **profile photo** (uploaded to
   Supabase Storage), followers / following lists, "Complete your profile".
@@ -28,6 +28,16 @@ imports in `lib/`), so it adapts to the phone it runs on:
   song, tagged people, a location, a link, the AI label, "Post only to
   profile", the audience, "Also share on your story", hide like count and
   turn off commenting.
+- **Text editor** (stories, posts, reels): Instagram's fonts, colors,
+  animations (Typewriter, Pop, Fade, Jump, Wobble), effects (Neon, Glow,
+  Shadow, Outline, Shimmer), alignment, background box, size slider,
+  Mention and Location. Drag texts and stickers; pinch to resize.
+- **Videos** (reels / video posts): text, filter, edit, ratio, overlay photo
+  and a draggable song sticker, applied while the video plays.
+- **Share sheet:** pick people (✓) and Send, Add to story, Copy link,
+  Share to feed.
+- **Reposts:** the repost button (or Share to feed) adds a post to your
+  profile's Reposts tab and to your followers' feeds ("username reposted").
 - **Reels:** videos from you and people you follow, then the sample channels.
 - **Sample channel profiles:** tap a sample account to see its profile and posts.
 - **Stories:** upload photos or videos (camera or gallery), add text, a
@@ -49,9 +59,8 @@ imports in `lib/`), so it adapts to the phone it runs on:
    all of [`supabase/schema.sql`](supabase/schema.sql) and press Run. It
    creates the tables, security rules, storage buckets and turns on realtime
    for messages. It is safe to run again: **run it again after every update**
-   that changes it (the latest, Update 5, adds the new post options: song,
-   poll, prompt, tags, link, AI label, post only to profile, hide like count
-   and turn off commenting).
+   that changes it (the latest, Update 6, adds reposts and saves texts and
+   video edits on posts).
 2. **Group members:** replace the placeholders in `lib/data/developers.dart`.
 3. `flutter pub get`
 

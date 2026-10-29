@@ -67,10 +67,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       _app(
-        const SizedBox(
-          height: 56,
-          child: IgTopBar(title: Text("Settings")),
-        ),
+        const SizedBox(height: 56, child: IgTopBar(title: Text("Settings"))),
       ),
     );
     expect(find.text("Settings"), findsOneWidget);
@@ -79,9 +76,8 @@ void main() {
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
     navigator.push(
       CupertinoPageRoute<void>(
-        builder: (_) => const CupertinoPageScaffold(
-          child: IgTopBar(title: Text("Inner")),
-        ),
+        builder: (_) =>
+            const CupertinoPageScaffold(child: IgTopBar(title: Text("Inner"))),
       ),
     );
     await tester.pumpAndSettle();
@@ -92,9 +88,7 @@ void main() {
   });
 
   testWidgets("FollowButton labels", (tester) async {
-    await tester.pumpWidget(
-      _app(FollowButton(following: false, onTap: () {})),
-    );
+    await tester.pumpWidget(_app(FollowButton(following: false, onTap: () {})));
     expect(find.text("Follow"), findsOneWidget);
     await tester.pumpWidget(_app(FollowButton(following: true, onTap: () {})));
     expect(find.text("Following"), findsOneWidget);

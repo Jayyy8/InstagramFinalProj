@@ -1,19 +1,8 @@
-import "dart:convert";
-import "dart:math";
-
-import "package:crypto/crypto.dart";
 import "package:flutter/cupertino.dart";
-import "package:flutter/foundation.dart"
-    show defaultTargetPlatform, kIsWeb, TargetPlatform;
 import "package:flutter_riverpod/flutter_riverpod.dart";
-import "package:sign_in_with_apple/sign_in_with_apple.dart";
 import "package:supabase_flutter/supabase_flutter.dart";
 
 import "supabase_providers.dart";
-
-/// Where the browser sends the user back to the app after Apple login.
-/// Must match the Android intent-filter and the Redirect URLs in Supabase.
-const String kOAuthRedirectUrl = "io.supabase.oauthactivity://login-callback/";
 
 /// UI state for auth actions: loading flag plus a message to display.
 class AuthUiState {
@@ -170,46 +159,6 @@ class AuthController extends Notifier<AuthUiState> {
     await _supabase.auth.signOut();
   }
 
-  /// iPhone / Mac use Apple's native sign-in sheet.
-  bool get _useNativeApple =>
-      !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.iOS ||
-          defaultTargetPlatform == TargetPlatform.macOS);
-
-  // Sign in with Apple
-  Future<bool> signInWithApple() => _run(() async {
-    if (_useNativeApple) {
-      // Native flow (iOS / macOS)
-      final rawNonce = _generateNonce();
-      final hashedNonce = sha256.convert(utf8.encode(rawNonce)).toString();
-
-      final credential = await SignInWithApple.getAppleIDCredential(
-        scopes: [
-          AppleIDAuthorizationScopes.email,
-          AppleIDAuthorizationScopes.fullName,
-        ],
-        nonce: hashedNonce,
-      );
-
-      final idToken = credential.identityToken;
-      if (idToken == null) {
-        throw const AuthException("No identity token received from Apple.");
-      }
-
-      await _supabase.auth.signInWithIdToken(
-        provider: OAuthProvider.apple,
-        idToken: idToken,
-        nonce: rawNonce,
-      );
-    } else {
-      // Web login through the browser (Android and others).
-      await _supabase.auth.signInWithOAuth(
-        OAuthProvider.apple,
-        redirectTo: kOAuthRedirectUrl,
-      );
-    }
-  });
-
   // Print current user
   void printCurrentUser() {
     final user = _supabase.auth.currentUser;
@@ -218,16 +167,6 @@ class AuthController extends Notifier<AuthUiState> {
 
   // Sign out
   Future<void> signOut() => _run(() => _supabase.auth.signOut());
-
-  String _generateNonce([int length = 32]) {
-    const charset =
-        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-._";
-    final random = Random.secure();
-    return List.generate(
-      length,
-      (_) => charset[random.nextInt(charset.length)],
-    ).join();
-  }
 }
 
 final authControllerProvider = NotifierProvider<AuthController, AuthUiState>(

@@ -36,8 +36,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_riverpod: 2.5.1
   supabase_flutter: ^2.18.0
-  sign_in_with_apple: ^8.2.0
-  crypto: ^3.0.7
   adaptive_platform_ui: ^1.0.2
   image_picker: ^1.2.4
   video_player: ^2.14.1
@@ -68,6 +66,49 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Text editor styles (Google Fonts, SIL Open Font License; see
+  # assets/fonts/README.md).
+  fonts:
+    - family: IgSignature
+      fonts:
+        - asset: assets/fonts/DancingScript.ttf
+    - family: IgEditor
+      fonts:
+        - asset: assets/fonts/PlayfairDisplay.ttf
+    - family: IgPoster
+      fonts:
+        - asset: assets/fonts/AbrilFatface.ttf
+    - family: IgBubble
+      fonts:
+        - asset: assets/fonts/Fredoka.ttf
+    - family: IgDeco
+      fonts:
+        - asset: assets/fonts/PoiretOne.ttf
+    - family: IgSqueeze
+      fonts:
+        - asset: assets/fonts/Anton.ttf
+    - family: IgTypewriter
+      fonts:
+        - asset: assets/fonts/CourierPrime.ttf
+    - family: IgMeme
+      fonts:
+        - asset: assets/fonts/Bangers.ttf
+    - family: IgElegant
+      fonts:
+        - asset: assets/fonts/CormorantGaramondItalic.ttf
+    - family: IgDirectional
+      fonts:
+        - asset: assets/fonts/LibreBaskervilleItalic.ttf
+    - family: IgLiterature
+      fonts:
+        - asset: assets/fonts/EBGaramond.ttf
+    - family: IgArcade
+      fonts:
+        - asset: assets/fonts/PressStart2P.ttf
+    - family: IgGothic
+      fonts:
+        - asset: assets/fonts/UnifrakturMaguntia.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

@@ -454,6 +454,58 @@ void main() {
       expect(old.locationSticker.scale, 1);
     });
 
+    test("text styles are saved, and older texts keep the old look", () {
+      const t = StoryOverlay(
+        text: "Hi",
+        font: "typewriter",
+        effect: "neon",
+        animation: "pop",
+        align: 0,
+        background: 2,
+      );
+      final back = StoryOverlay.fromMap(t.toMap());
+      expect(back.font, "typewriter");
+      expect(back.effect, "neon");
+      expect(back.animation, "pop");
+      expect(back.align, 0);
+      expect(back.background, 2);
+      final old = StoryOverlay.fromMap({"text": "Old", "x": 0.5, "y": 0.4});
+      expect(old.font, "classic");
+      expect(old.effect, "none");
+      expect(old.align, 1);
+      expect(old.background, 0);
+    });
+
+    test("post texts, photo sizes and the video look round-trip", () {
+      final texts = PostText.listFromJson([
+        const PostText(photo: 1, text: StoryOverlay(text: "Two")).toJson(),
+        {"photo": 0, "text": ""},
+      ]);
+      expect(texts.length, 1);
+      expect(texts.first.photo, 1);
+      expect(texts.first.text.text, "Two");
+
+      const edits = PostEdits(
+        aspects: [0.8, 1],
+        video: VideoLook(
+          filter: "moon",
+          adjust: {"brightness": 0.3},
+          ratio: "square",
+          overlayUrl: "https://example.com/o.jpg",
+          overlayX: 0.2,
+        ),
+      );
+      final back = PostEdits.fromJson(edits.toJson())!;
+      expect(back.aspectOf(0), 0.8);
+      expect(back.aspectOf(5), 1);
+      expect(back.video!.filter, "moon");
+      expect(back.video!.adjust["brightness"], 0.3);
+      expect(back.video!.overlayUrl, "https://example.com/o.jpg");
+      expect(back.video!.overlayX, 0.2);
+      expect(back.video!.isPlain, isFalse);
+      expect(const VideoLook().isPlain, isTrue);
+    });
+
     test("song length is shown as m:ss", () {
       const m = Music(
         title: "T",

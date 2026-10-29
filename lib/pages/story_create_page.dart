@@ -17,8 +17,9 @@ import "../widgets/dialogs.dart";
 import "../widgets/gradient_avatar.dart";
 import "../widgets/music_picker.dart";
 import "../widgets/music_sticker.dart";
+import "../widgets/story_text.dart";
+import "../widgets/text_editor.dart";
 import "music_sticker_editor.dart";
-import "story_viewer_page.dart";
 
 /// "Add to story": choose where the photo or video comes from.
 class StoryCreatePage extends ConsumerStatefulWidget {
@@ -192,18 +193,6 @@ class _StoryCreatePageState extends ConsumerState<StoryCreatePage> {
   }
 }
 
-const List<int> _textColors = [
-  0xFFFFFFFF,
-  0xFF000000,
-  0xFF0095F6,
-  0xFF1BD760,
-  0xFFFED800,
-  0xFFFA7E1E,
-  0xFFED4956,
-  0xFFD62976,
-  0xFF962FBF,
-];
-
 /// Preview of the picked photo / video with text tools, then share.
 class StoryEditorPage extends ConsumerStatefulWidget {
   final XFile file;
@@ -217,12 +206,10 @@ class StoryEditorPage extends ConsumerStatefulWidget {
 
 class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
   final List<StoryOverlay> _overlays = [];
-  final TextEditingController _text = TextEditingController();
   VideoPlayerController? _video;
 
   /// Index of the text being typed (-1 = new text), null = not editing.
   int? _editing;
-  int _color = _textColors.first;
   bool _uploading = false;
   Music? _music;
 
@@ -268,35 +255,25 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
   void dispose() {
     _video?.dispose();
     _preview.stop();
-    _text.dispose();
     super.dispose();
   }
 
   void _startText([int? index]) {
-    setState(() {
-      _editing = index ?? -1;
-      if (index != null) {
-        _text.text = _overlays[index].text;
-        _color = _overlays[index].color;
-      } else {
-        _text.clear();
-        _color = _textColors.first;
-      }
-    });
+    setState(() => _editing = index ?? -1);
   }
 
-  void _finishText() {
-    final t = _text.text.trim();
+  /// Back from the text editor: a new text, the edited one, or none.
+  void _finishText(StoryOverlay? text) {
     final index = _editing;
     setState(() {
       if (index != null && index >= 0) {
-        if (t.isEmpty) {
+        if (text == null) {
           _overlays.removeAt(index);
         } else {
-          _overlays[index] = _overlays[index].copyWith(text: t, color: _color);
+          _overlays[index] = text;
         }
-      } else if (t.isNotEmpty) {
-        _overlays.add(StoryOverlay(text: t, color: _color));
+      } else if (text != null) {
+        _overlays.add(text);
       }
       _editing = null;
     });
@@ -847,85 +824,18 @@ class _StoryEditorPageState extends ConsumerState<StoryEditorPage> {
               ),
             ),
 
-          // ───── Typing a text ─────
+          // ───── Typing a text (Instagram's text editor) ─────
           if (_editing != null)
-            Positioned.fill(
-              child: GestureDetector(
-                onTap: _finishText,
-                child: ColoredBox(
-                  color: const Color(0x99000000),
-                  child: Padding(
-                    padding: EdgeInsets.only(
-                      top: padding.top + 8,
-                      bottom: MediaQuery.viewInsetsOf(context).bottom + 12,
-                    ),
-                    child: Column(
-                      children: [
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: CupertinoButton(
-                            onPressed: _finishText,
-                            child: const Text(
-                              "Done",
-                              style: TextStyle(
-                                color: Color(0xFFFFFFFF),
-                                fontWeight: FontWeight.w700,
-                                fontSize: 17,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Center(
-                            child: CupertinoTextField(
-                              controller: _text,
-                              autofocus: true,
-                              textAlign: TextAlign.center,
-                              maxLines: null,
-                              decoration: null,
-                              cursorColor: Color(_color),
-                              style: TextStyle(
-                                color: Color(_color),
-                                fontSize: 30,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                        SizedBox(
-                          height: 40,
-                          child: ListView(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            children: [
-                              for (final c in _textColors)
-                                GestureDetector(
-                                  onTap: () => setState(() => _color = c),
-                                  child: Container(
-                                    width: 30,
-                                    height: 30,
-                                    margin: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 5,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Color(c),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: const Color(0xFFFFFFFF),
-                                        width: c == _color ? 3 : 1.5,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
+            TextEditorOverlay(
+              initial: _editing! >= 0
+                  ? _overlays[_editing!]
+                  : const StoryOverlay(text: ""),
+              onDone: _finishText,
+              // Location adds the location sticker, like Instagram.
+              onLocation: () async {
+                await _pickLocation();
+                return null;
+              },
             ),
 
           if (_uploading)

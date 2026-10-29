@@ -20,6 +20,7 @@ import "../../widgets/edited_photo.dart";
 import "../../widgets/feed_image.dart";
 import "../../widgets/gradient_avatar.dart";
 import "../../widgets/music_picker.dart";
+import "../../widgets/overlay_canvas.dart";
 import "../../widgets/sub_page.dart";
 import "../close_friends_page.dart";
 import "post_editor_page.dart";
@@ -30,6 +31,9 @@ class PostDetailsPage extends ConsumerStatefulWidget {
   final List<PostMedia> media;
   final PostRatio ratio;
   final Music? music;
+
+  /// The song sticker placed in the editor.
+  final MusicSticker musicSticker;
   final bool reel;
 
   const PostDetailsPage({
@@ -37,6 +41,7 @@ class PostDetailsPage extends ConsumerStatefulWidget {
     required this.media,
     required this.ratio,
     this.music,
+    this.musicSticker = const MusicSticker(),
     this.reel = false,
   });
 
@@ -144,13 +149,50 @@ class _PostDetailsPageState extends ConsumerState<PostDetailsPage> {
     try {
       final photos = <XFile>[];
       XFile? video;
+      VideoLook? look;
+      XFile? videoOverlay;
       for (final m in widget.media) {
         if (m.video) {
           video = m.file;
+          // A video keeps its filter, edits, crop and overlay photo as
+          // settings, applied while it plays.
+          final o = m.edit.overlay;
+          look = VideoLook(
+            filter: m.edit.filter.name,
+            adjust: {
+              for (final e in m.edit.adjust.entries)
+                if (e.value != 0) e.key.name: e.value,
+            },
+            ratio: widget.ratio.name,
+            overlayX: o?.x ?? 0.5,
+            overlayY: o?.y ?? 0.5,
+            overlayWidth: o?.width ?? 0.4,
+          );
+          if (o != null) videoOverlay = XFile(o.path);
         } else {
           photos.add(await bakePhoto(m.file, m.edit, widget.ratio));
         }
       }
+      final texts = [
+        for (int i = 0; i < widget.media.length; i++)
+          for (final t in widget.media[i].texts) PostText(photo: i, text: t),
+      ];
+      final showSticker = _music != null && !widget.musicSticker.hidden;
+      // Saved only when something needs it, so posts work without
+      // Update 6 of schema.sql.
+      final needsEdits =
+          texts.isNotEmpty ||
+          showSticker ||
+          (look != null && (!look.isPlain || videoOverlay != null));
+      final edits = needsEdits
+          ? PostEdits(
+              aspects: [
+                for (final m in widget.media)
+                  widget.ratio.value ?? m.aspect ?? 1,
+              ],
+              video: look,
+            )
+          : null;
       await ref
           .read(postActionsProvider)
           .create(
@@ -160,6 +202,10 @@ class _PostDetailsPageState extends ConsumerState<PostDetailsPage> {
             location: _location,
             audience: _audience,
             music: _music,
+            musicSticker: _music == null ? null : widget.musicSticker,
+            texts: texts,
+            edits: edits,
+            videoOverlay: videoOverlay,
             poll: _poll,
             prompt: _prompt,
             tags: _tags,
@@ -607,11 +653,24 @@ class _PostDetailsPageState extends ConsumerState<PostDetailsPage> {
                       clipBehavior: Clip.hardEdge,
                       child: SizedBox(
                         width: 400,
-                        child: EditedPhoto(
-                          path: m.file.path,
-                          edit: m.edit,
-                          ratio: widget.ratio,
-                          aspect: m.aspect ?? 1,
+                        child: Stack(
+                          children: [
+                            EditedPhoto(
+                              path: m.file.path,
+                              edit: m.edit,
+                              ratio: widget.ratio,
+                              aspect: m.aspect ?? 1,
+                            ),
+                            Positioned.fill(
+                              child: OverlayCanvas(
+                                texts: m.texts,
+                                music: i == 0 ? _music : null,
+                                sticker: widget.musicSticker,
+                                animate: false,
+                                spinning: false,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),

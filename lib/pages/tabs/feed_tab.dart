@@ -29,6 +29,7 @@ class FeedTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loading = ref.watch(feedLoadingProvider);
     final posts = ref.watch(feedProvider);
+    final reposters = ref.watch(feedRepostersProvider);
     final colors = AppColors.of(context);
 
     // Shimmering placeholders while the feed loads.
@@ -57,8 +58,11 @@ class FeedTab extends ConsumerWidget {
             ),
           SliverList.builder(
             itemCount: posts.length,
-            itemBuilder: (context, i) =>
-                PostCard(key: ValueKey(posts[i].id), post: posts[i]),
+            itemBuilder: (context, i) => PostCard(
+              key: ValueKey(posts[i].id),
+              post: posts[i],
+              repostedBy: reposters[posts[i].id],
+            ),
           ),
           SliverToBoxAdapter(child: SizedBox(height: bottomBarInset(context))),
         ],

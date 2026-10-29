@@ -19,6 +19,7 @@ import "../widgets/feed_image.dart";
 import "../widgets/gradient_avatar.dart";
 import "../widgets/music_picker.dart";
 import "../widgets/music_sticker.dart";
+import "../widgets/story_text.dart";
 import "channel_profile_page.dart";
 import "profile_page.dart";
 import "story_create_page.dart";
@@ -964,35 +965,6 @@ class _ProgressBars extends StatelessWidget {
           ],
         );
       },
-    );
-  }
-}
-
-/// Text placed on a story (also used by the story editor).
-class StoryOverlayText extends StatelessWidget {
-  final StoryOverlay overlay;
-
-  const StoryOverlayText({super.key, required this.overlay});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = Color(overlay.color);
-    final darkText = color.computeLuminance() > 0.6;
-    return Text(
-      overlay.text,
-      textAlign: TextAlign.center,
-      style: TextStyle(
-        color: color,
-        fontSize: overlay.size,
-        fontWeight: FontWeight.w700,
-        decoration: TextDecoration.none,
-        shadows: [
-          Shadow(
-            color: darkText ? const Color(0x99000000) : const Color(0x66000000),
-            blurRadius: 6,
-          ),
-        ],
-      ),
     );
   }
 }

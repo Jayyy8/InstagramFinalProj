@@ -61,7 +61,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = ref.read(authControllerProvider.notifier);
     final loading = ref.watch(authControllerProvider).loading;
 
     return AdaptiveScaffold(
@@ -145,15 +144,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 onTap: loading
                                     ? null
                                     : () => _push(const OtpPage()),
-                              ),
-                              const SizedBox(height: 12),
-                              AuthButton(
-                                label: "Log in with Apple",
-                                icon: CupertinoIcons.person_crop_circle,
-                                outlined: true,
-                                onTap: loading
-                                    ? null
-                                    : () => controller.signInWithApple(),
                               ),
                               const SizedBox(height: 16),
                               const AuthMessage(),

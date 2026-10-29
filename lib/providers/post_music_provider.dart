@@ -22,7 +22,14 @@ class PostMusicNotifier extends Notifier<String?> {
       return;
     }
     state = post.id;
-    await _player.play(music.previewUrl);
+    // The part of the song chosen in the editor (older posts: all of it).
+    final s = post.musicSticker;
+    final chosen = !s.hidden || s.startMs > 0;
+    await _player.play(
+      music.previewUrl,
+      start: Duration(milliseconds: chosen ? s.startMs : 0),
+      length: chosen ? Duration(milliseconds: s.clipMs) : null,
+    );
   }
 
   Future<void> stop() async {

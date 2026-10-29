@@ -15,6 +15,7 @@ import "../../widgets/dialogs.dart";
 import "../../widgets/feed_image.dart";
 import "../../widgets/gradient_avatar.dart";
 import "../../widgets/post_actions.dart";
+import "../../widgets/post_layers.dart";
 import "../../widgets/shimmer.dart";
 import "../channel_profile_page.dart";
 
@@ -287,6 +288,12 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
   /// Hidden behind another tab or page: don't play.
   bool _onScreen = true;
 
+  /// The reel's song (chosen in the editor) plays instead of its sound.
+  final PreviewPlayer _song = PreviewPlayer();
+  bool _songStarted = false;
+
+  bool get _hasSong => widget.post.music != null;
+
   bool get _shouldPlay => widget.playing && !_holding && _onScreen;
 
   @override
@@ -305,7 +312,7 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
           if (!mounted) return;
           controller
             ..setLooping(true)
-            ..setVolume(widget.muted ? 0 : 1);
+            ..setVolume(widget.muted || _hasSong ? 0 : 1);
           setState(() {});
           _sync();
         })
@@ -325,7 +332,8 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
   void didUpdateWidget(covariant _ReelPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.muted != widget.muted) {
-      _video?.setVolume(widget.muted ? 0 : 1);
+      _video?.setVolume(widget.muted || _hasSong ? 0 : 1);
+      if (_hasSong && widget.muted) _song.pause();
     }
     _sync();
   }
@@ -334,6 +342,7 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
   void dispose() {
     _soundTimer?.cancel();
     _video?.dispose();
+    _song.stop();
     super.dispose();
   }
 
@@ -344,6 +353,27 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
       v.play();
     } else if (!_shouldPlay && v.value.isPlaying) {
       v.pause();
+    }
+    _syncSong();
+  }
+
+  void _syncSong() {
+    final music = widget.post.music;
+    if (music == null) return;
+    final play = _shouldPlay && !widget.muted;
+    if (play && !_songStarted) {
+      _songStarted = true;
+      final s = widget.post.musicSticker;
+      final chosen = !s.hidden || s.startMs > 0;
+      _song.play(
+        music.previewUrl,
+        start: Duration(milliseconds: chosen ? s.startMs : 0),
+        length: chosen ? Duration(milliseconds: s.clipMs) : null,
+      );
+    } else if (play) {
+      _song.resume();
+    } else {
+      _song.pause();
     }
   }
 
@@ -393,7 +423,7 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
     // Landscape videos sit in the middle with black above and below, like
     // Instagram; portrait videos fill the screen.
     final landscape = size.width > size.height;
-    return FittedBox(
+    Widget video = FittedBox(
       fit: landscape ? BoxFit.contain : BoxFit.cover,
       child: SizedBox(
         width: size.width,
@@ -401,6 +431,15 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
         child: VideoPlayer(v),
       ),
     );
+    final matrix = videoLookMatrix(post.edits?.video);
+    if (matrix != null) {
+      video = ColorFiltered(
+        colorFilter: ColorFilter.matrix(matrix),
+        child: video,
+      );
+    }
+    // Texts and the song sticker from the editor, on the video.
+    return PostLayers(post: post, index: 0, playing: _shouldPlay, media: video);
   }
 
   @override
@@ -417,7 +456,11 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
     final mine = post.author?.id == me;
 
     // Sample reels show believable counts; real ones show real counts.
-    final reposts = post.remote ? 0 : post.baseLikes ~/ 52;
+    final reposted =
+        ref.watch(myRepostsProvider).valueOrNull?.contains(post.id) ?? false;
+    final reposts =
+        (post.remote ? post.baseReposts : post.baseLikes ~/ 52) +
+        (reposted ? 1 : 0);
     final shares = post.remote ? 0 : post.baseLikes ~/ 7;
     final saves = post.remote ? 0 : post.baseLikes ~/ 9;
 
@@ -564,9 +607,10 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
                 ),
                 side(
                   CupertinoIcons.arrow_2_squarepath,
-                  "Repost",
+                  reposted ? "Undo repost" : "Repost",
                   reposts > 0 ? compactCount(reposts) : "",
-                  () => showToast(context, "Reposted to your followers"),
+                  () => toggleRepost(context, ref, post),
+                  color: reposted ? const Color(0xFF2ECC71) : null,
                 ),
                 side(
                   CupertinoIcons.paperplane,

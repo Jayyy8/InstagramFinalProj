@@ -84,6 +84,7 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
     ref.invalidate(profileProvider(widget.userId));
     ref.invalidate(profileStatsProvider(widget.userId));
     ref.invalidate(userPostIdsProvider(widget.userId));
+    ref.invalidate(userRepostIdsProvider(widget.userId));
     if (widget.userId == ref.read(currentUserIdProvider)) {
       ref.invalidate(myProfileProvider);
     }
@@ -353,7 +354,8 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
         for (final (i, icon) in [
           (0, CupertinoIcons.square_grid_3x2),
           (1, CupertinoIcons.play_rectangle),
-          (2, CupertinoIcons.person_crop_square),
+          (2, CupertinoIcons.arrow_2_squarepath),
+          (3, CupertinoIcons.person_crop_square),
         ])
           Expanded(
             child: GestureDetector(
@@ -435,6 +437,22 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   : "Reels ${profile.username} shares will appear here.",
             )
           : PostGrid(posts: reels, scrollable: false, aspectRatio: 9 / 16);
+    } else if (_tab == 2) {
+      // Reposts: posts (yours, friends' or sample channels') this account
+      // reposted, newest first.
+      final ids =
+          ref.watch(userRepostIdsProvider(profile.id)).valueOrNull ??
+          const <String>[];
+      final reposts = [for (final id in ids) ?ref.watch(postProvider(id))];
+      content = reposts.isEmpty
+          ? empty(
+              CupertinoIcons.arrow_2_squarepath,
+              isMe ? "Share what you love" : "No reposts yet",
+              isMe
+                  ? "Posts you repost will appear here, and in your followers' feeds."
+                  : "Posts ${profile.username} reposts will appear here.",
+            )
+          : PostGrid(posts: reposts, scrollable: false, aspectRatio: 3 / 4);
     } else {
       content = empty(
         CupertinoIcons.person_crop_square,

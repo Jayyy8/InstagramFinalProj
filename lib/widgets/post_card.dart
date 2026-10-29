@@ -5,6 +5,7 @@ import "../data/sample_feed.dart";
 
 import "../models/audience.dart";
 import "../models/feed_models.dart";
+import "../models/social_models.dart";
 import "../navigation.dart";
 import "../pages/channel_profile_page.dart";
 import "../pages/create/post_details_page.dart" show TagLabel;
@@ -20,6 +21,7 @@ import "follow_button.dart";
 import "gradient_avatar.dart";
 import "post_actions.dart";
 import "post_extras_view.dart";
+import "post_layers.dart";
 import "post_video.dart";
 
 /// One post in the feed, laid out like Instagram:
@@ -27,7 +29,10 @@ import "post_video.dart";
 class PostCard extends ConsumerStatefulWidget {
   final FeedPost post;
 
-  const PostCard({super.key, required this.post});
+  /// Shown above the post when it's in your feed because someone reposted it.
+  final Profile? repostedBy;
+
+  const PostCard({super.key, required this.post, this.repostedBy});
 
   @override
   ConsumerState<PostCard> createState() => _PostCardState();
@@ -151,9 +156,44 @@ class _PostCardState extends ConsumerState<PostCard> {
         if (t.photo == _page) t,
     ];
 
+    final reposted =
+        ref.watch(myRepostsProvider).valueOrNull?.contains(post.id) ?? false;
+    final repostCount =
+        (post.remote ? post.baseReposts : post.baseLikes ~/ 68) +
+        (reposted ? 1 : 0);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        if (widget.repostedBy != null)
+          GestureDetector(
+            onTap: () => openProfile(context, widget.repostedBy!),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(14, 8, 12, 0),
+              child: Row(
+                children: [
+                  Icon(
+                    CupertinoIcons.arrow_2_squarepath,
+                    size: 14,
+                    color: colors.secondaryText,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      "${widget.repostedBy!.username} reposted",
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: colors.secondaryText,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         // ───── Header ─────
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
@@ -291,15 +331,37 @@ class _PostCardState extends ConsumerState<PostCard> {
             child: Stack(
               fit: StackFit.expand,
               children: [
+                // Texts, song sticker and video looks from the editor sit on
+                // the photo / video (see PostLayers).
                 if (post.isVideo)
-                  PostVideo(url: post.imageUrls.first)
+                  PostLayers(
+                    post: post,
+                    index: 0,
+                    playing: playing,
+                    media: PostVideo(
+                      url: post.imageUrls.first,
+                      colorMatrix: videoLookMatrix(post.edits?.video),
+                      // The post's song plays instead of the video's sound.
+                      startMuted: post.music != null,
+                    ),
+                  )
                 else if (photos.length <= 1)
-                  FeedImage(urls: post.cover)
+                  PostLayers(
+                    post: post,
+                    index: 0,
+                    playing: playing,
+                    media: FeedImage(urls: post.cover),
+                  )
                 else
                   PageView.builder(
                     itemCount: photos.length,
                     onPageChanged: (i) => setState(() => _page = i),
-                    itemBuilder: (_, i) => FeedImage(urls: photos[i]),
+                    itemBuilder: (_, i) => PostLayers(
+                      post: post,
+                      index: i,
+                      playing: playing,
+                      media: FeedImage(urls: photos[i]),
+                    ),
                   ),
                 if (photos.length > 1)
                   Positioned(
@@ -350,10 +412,11 @@ class _PostCardState extends ConsumerState<PostCard> {
                       onTap: () => setState(() => _showTags = !_showTags),
                     ),
                   ),
-                if (post.music != null && !post.isVideo)
+                if (post.music != null)
                   Positioned(
                     right: 12,
-                    bottom: 12,
+                    // Above a video's own sound button.
+                    bottom: post.isVideo ? 50 : 12,
                     child: _PhotoBadge(
                       icon: playing
                           ? CupertinoIcons.speaker_2_fill
@@ -409,9 +472,10 @@ class _PostCardState extends ConsumerState<PostCard> {
                 ),
               _CountAction(
                 icon: CupertinoIcons.arrow_2_squarepath,
-                count: post.remote ? 0 : post.baseLikes ~/ 68,
-                label: "Repost",
-                onTap: () => showToast(context, "Reposted to your followers"),
+                color: reposted ? const Color(0xFF2ECC71) : null,
+                count: repostCount,
+                label: reposted ? "Undo repost" : "Repost",
+                onTap: () => toggleRepost(context, ref, post),
               ),
               _CountAction(
                 icon: CupertinoIcons.paperplane,

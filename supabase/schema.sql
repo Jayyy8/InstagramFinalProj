@@ -726,3 +726,32 @@ create policy "comments insert own" on public.comments
         and (p.comments_off = false or p.user_id = auth.uid())
     )
   );
+
+-- ════════════════════ Update 6: Reposts, texts and video edits ═══════════
+-- Reposts: the repost button (or "Share to feed" in the share sheet) puts a
+-- post on your profile's Reposts tab and in your followers' feeds.
+-- post_id is text so sample channel posts can be reposted too.
+create table if not exists public.reposts (
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  post_id    text not null,
+  created_at timestamptz not null default now(),
+  primary key (user_id, post_id)
+);
+create index if not exists reposts_post_idx on public.reposts (post_id);
+
+alter table public.reposts enable row level security;
+
+drop policy if exists "reposts read" on public.reposts;
+create policy "reposts read" on public.reposts
+  for select to authenticated using (true);
+drop policy if exists "reposts insert own" on public.reposts;
+create policy "reposts insert own" on public.reposts
+  for insert to authenticated with check (user_id = auth.uid());
+drop policy if exists "reposts delete own" on public.reposts;
+create policy "reposts delete own" on public.reposts
+  for delete to authenticated using (user_id = auth.uid());
+
+-- Texts placed on a post's photos / video (font, color, effect, ...), and a
+-- video's filter, edits and crop (a video can't have them drawn into it).
+alter table public.posts add column if not exists overlays jsonb not null default '[]'::jsonb;
+alter table public.posts add column if not exists edits    jsonb;

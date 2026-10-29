@@ -283,6 +283,12 @@ class SocialRepository {
           .eq("user_id", myId)
           .inFilter("post_id", ids)
           .then((v) => v, onError: (_) => <Map<String, dynamic>>[]),
+      // reposts comes with Update 6 of schema.sql.
+      _db
+          .from("reposts")
+          .select("post_id, user_id")
+          .inFilter("post_id", ids)
+          .then((v) => v, onError: (_) => <Map<String, dynamic>>[]),
       // poll_votes comes with Update 5 of schema.sql.
       if (pollIds.isEmpty)
         Future.value(<Map<String, dynamic>>[])
@@ -312,7 +318,12 @@ class SocialRepository {
     final saved = {for (final r in results[2]) r["post_id"] as String};
     final votes = <String, List<int>>{};
     final myVotes = <String, int>{};
-    for (final v in results[3]) {
+    final repostCount = <String, int>{};
+    for (final r in results[3]) {
+      final id = r["post_id"] as String;
+      if (r["user_id"] != myId) repostCount[id] = (repostCount[id] ?? 0) + 1;
+    }
+    for (final v in results[4]) {
       final id = v["post_id"] as String;
       final option = (v["option"] as num).toInt();
       final counts = votes.putIfAbsent(id, () => List.filled(4, 0));
@@ -339,9 +350,16 @@ class SocialRepository {
               liked: liked,
               saved: saved.contains(id),
               commentCount: commentCount[id] ?? 0,
+              baseReposts: repostCount[id] ?? 0,
               isVideo: r["media_type"] == "video",
               audience: Audience.fromKey(r["audience"]),
               music: Music.fromJson(r["music"]),
+              // Posts from before the sticker existed show no sticker.
+              musicSticker: (r["music"] is Map && r["music"]["sticker"] != null)
+                  ? MusicSticker.fromJson(r["music"])
+                  : const MusicSticker(hidden: true),
+              texts: PostText.listFromJson(r["overlays"]),
+              edits: PostEdits.fromJson(r["edits"]),
               poll: Poll.fromJson(r["poll"]),
               pollVotes: votes[id] ?? const [],
               myVote: myVotes[id],
@@ -437,6 +455,10 @@ class SocialRepository {
     XFile? video,
     Audience audience = Audience.public,
     Music? music,
+    MusicSticker? musicSticker,
+    List<PostText> texts = const [],
+    PostEdits? edits,
+    XFile? videoOverlay,
     Poll? poll,
     String? prompt,
     List<PostTag> tags = const [],
@@ -446,6 +468,24 @@ class SocialRepository {
     bool commentsOff = false,
     bool profileOnly = false,
   }) async {
+    // A photo placed on a video is uploaded and shown on top of it.
+    var postEdits = edits;
+    final look = edits?.video;
+    if (videoOverlay != null && look != null) {
+      final overlayUrl = await upload("posts", videoOverlay);
+      postEdits = PostEdits(
+        aspects: edits!.aspects,
+        video: VideoLook(
+          filter: look.filter,
+          adjust: look.adjust,
+          ratio: look.ratio,
+          overlayUrl: overlayUrl,
+          overlayX: look.overlayX,
+          overlayY: look.overlayY,
+          overlayWidth: look.overlayWidth,
+        ),
+      );
+    }
     final urls = <String>[];
     if (video != null) {
       urls.add(await upload("posts", video));
@@ -467,7 +507,11 @@ class SocialRepository {
           if (audience != Audience.public) "audience": audience.key,
           // The extras below need Update 5 of schema.sql; each one is only
           // sent when used, so plain posts work without it.
-          "music": ?music?.toJson(),
+          if (music != null)
+            "music": {...music.toJson(), "sticker": ?musicSticker?.toJson()},
+          // Texts and video looks need Update 6 of schema.sql.
+          if (texts.isNotEmpty) "overlays": [for (final t in texts) t.toJson()],
+          "edits": ?postEdits?.toJson(),
           "poll": ?poll?.toJson(),
           if (prompt != null && prompt.trim().isNotEmpty)
             "prompt": prompt.trim(),
@@ -499,6 +543,83 @@ class SocialRepository {
     } else {
       await _db.from("likes").delete().eq("post_id", postId).eq("user_id", me);
     }
+  }
+
+  // ─────────────────────────── Reposts ───────────────────────────
+
+  /// Posts (real or sample) you reposted.
+  Future<Set<String>> myRepostIds() async {
+    final rows = await _db.from("reposts").select("post_id").eq("user_id", me);
+    return {for (final r in rows) r["post_id"] as String};
+  }
+
+  Future<void> setRepost(String postId, bool on) async {
+    if (on) {
+      await _db.from("reposts").upsert({
+        "post_id": postId,
+        "user_id": me,
+      }, ignoreDuplicates: true);
+    } else {
+      await _db
+          .from("reposts")
+          .delete()
+          .eq("post_id", postId)
+          .eq("user_id", me);
+    }
+  }
+
+  /// Ids an account reposted, newest first (sample ids stay as they are).
+  Future<List<String>> repostIds(String userId) async {
+    final rows = await _db
+        .from("reposts")
+        .select("post_id")
+        .eq("user_id", userId)
+        .order("created_at", ascending: false);
+    return [for (final r in rows) r["post_id"] as String];
+  }
+
+  static final RegExp _uuid = RegExp(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+  );
+
+  /// Real posts by id (sample ids are skipped), in no particular order.
+  Future<List<FeedPost>> postsByIds(Iterable<String> ids) async {
+    final real = [
+      for (final id in ids)
+        if (_uuid.hasMatch(id)) id,
+    ];
+    if (real.isEmpty) return [];
+    final rows = await _db
+        .from("posts")
+        .select(_postColumns)
+        .inFilter("id", real);
+    return _toPosts(rows);
+  }
+
+  /// What people you follow reposted lately: (post id, who, when).
+  Future<List<(String, Profile, DateTime)>> followingReposts(
+    Set<String> following,
+  ) async {
+    if (following.isEmpty) return const [];
+    final rows = await _db
+        .from("reposts")
+        .select("post_id, user_id, created_at")
+        .inFilter("user_id", following.toList())
+        .order("created_at", ascending: false)
+        .limit(40);
+    final people = await _profiles([
+      for (final r in rows) r["user_id"] as String,
+    ]);
+    return [
+      for (final r in rows)
+        if (people[r["user_id"]] != null)
+          (
+            r["post_id"] as String,
+            people[r["user_id"]]!,
+            DateTime.tryParse(r["created_at"] as String)?.toLocal() ??
+                DateTime.now(),
+          ),
+    ];
   }
 
   Future<void> setSaved(String postId, bool save) async {

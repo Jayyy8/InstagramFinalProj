@@ -153,6 +153,9 @@ class FeedPost {
   final List<FeedComment> comments;
   final int commentCount;
 
+  /// Reposts by other people (yours is kept by the reposts provider).
+  final int baseReposts;
+
   /// The post is one video ([imageUrls] holds its URL).
   final bool isVideo;
 
@@ -164,6 +167,13 @@ class FeedPost {
 
   // ───── Chosen on the "New post" details page ─────
   final Music? music;
+
+  /// The song sticker on the first photo / the video.
+  final MusicSticker musicSticker;
+
+  /// Texts on the photos / video, and each photo's size and the video's look.
+  final List<PostText> texts;
+  final PostEdits? edits;
   final Poll? poll;
 
   /// Votes per poll option, and the option you picked (null = no vote).
@@ -201,10 +211,14 @@ class FeedPost {
     this.saved = false,
     this.comments = const [],
     this.commentCount = 0,
+    this.baseReposts = 0,
     this.isVideo = false,
     this.audience = Audience.public,
     this.showInFeed = true,
     this.music,
+    this.musicSticker = const MusicSticker(hidden: true),
+    this.texts = const [],
+    this.edits,
     this.poll,
     this.pollVotes = const [],
     this.myVote,
@@ -262,10 +276,14 @@ class FeedPost {
       saved: saved ?? this.saved,
       comments: comments ?? this.comments,
       commentCount: commentCount ?? this.commentCount,
+      baseReposts: baseReposts,
       isVideo: isVideo,
       audience: audience ?? this.audience,
       showInFeed: showInFeed,
       music: music,
+      musicSticker: musicSticker,
+      texts: texts,
+      edits: edits,
       poll: poll,
       pollVotes: pollVotes ?? this.pollVotes,
       myVote: myVote != null ? myVote() : this.myVote,

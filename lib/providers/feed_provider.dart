@@ -85,14 +85,52 @@ Future<List<String>> _cacheIds(Ref ref, Future<List<FeedPost>> load) async {
   return [for (final p in posts) p.id];
 }
 
-/// Real posts for the home feed: you and the people you follow.
+/// Who reposted a post that is in your feed only because of that repost.
+class FeedRepostersNotifier extends Notifier<Map<String, Profile>> {
+  @override
+  Map<String, Profile> build() => const {};
+
+  void set(Map<String, Profile> reposters) => state = reposters;
+}
+
+final feedRepostersProvider =
+    NotifierProvider<FeedRepostersNotifier, Map<String, Profile>>(
+      FeedRepostersNotifier.new,
+    );
+
+/// Real posts for the home feed: you and the people you follow, plus what
+/// they reposted ("username reposted"), newest first.
 class HomeFeedNotifier extends AsyncNotifier<List<String>> {
   @override
   Future<List<String>> build() async {
     if (ref.watch(currentUserIdProvider) == null) return [];
     final following = await ref.watch(followingProvider.future);
     final repo = ref.read(repositoryProvider);
-    return _cacheIds(ref, repo.homeFeed(following));
+    final posts = await repo.homeFeed(following);
+
+    // Reposts need Update 6 of schema.sql; without it the feed is as before.
+    final reposts = await repo
+        .followingReposts(following)
+        .catchError((_) => <(String, Profile, DateTime)>[]);
+    final have = {for (final p in posts) p.id};
+    final reposters = <String, Profile>{};
+    final when = <String, DateTime>{};
+    for (final (postId, who, at) in reposts) {
+      if (have.contains(postId) || reposters.containsKey(postId)) continue;
+      reposters[postId] = who;
+      when[postId] = at;
+    }
+    final reposted = await repo
+        .postsByIds(reposters.keys)
+        .catchError((_) => <FeedPost>[]);
+    reposters.removeWhere((id, _) => !reposted.any((p) => p.id == id));
+
+    final all = [...posts, ...reposted];
+    DateTime time(FeedPost p) =>
+        when[p.id] ?? p.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+    all.sort((a, b) => time(b).compareTo(time(a)));
+    ref.read(feedRepostersProvider.notifier).set(reposters);
+    return _cacheIds(ref, Future.value(all));
   }
 
   Future<void> refresh() async {
@@ -219,6 +257,48 @@ final userPostIdsProvider = FutureProvider.autoDispose
 final explorePostIdsProvider = FutureProvider<List<String>>(
   (ref) => _cacheIds(ref, ref.watch(repositoryProvider).explorePosts()),
 );
+
+/// Posts (real or sample) you reposted; the repost button toggles them.
+class MyRepostsNotifier extends AsyncNotifier<Set<String>> {
+  @override
+  Future<Set<String>> build() async {
+    if (ref.watch(currentUserIdProvider) == null) return {};
+    // Without Update 6 of schema.sql nothing is reposted yet.
+    return ref
+        .read(repositoryProvider)
+        .myRepostIds()
+        .catchError((_) => <String>{});
+  }
+
+  Future<void> toggle(String postId) async {
+    final now = state.valueOrNull ?? <String>{};
+    final on = !now.contains(postId);
+    state = AsyncData(on ? {...now, postId} : ({...now}..remove(postId)));
+    try {
+      await ref.read(repositoryProvider).setRepost(postId, on);
+      final me = ref.read(currentUserIdProvider);
+      if (me != null) ref.invalidate(userRepostIdsProvider(me));
+    } catch (_) {
+      state = AsyncData(now);
+      rethrow;
+    }
+  }
+}
+
+final myRepostsProvider = AsyncNotifierProvider<MyRepostsNotifier, Set<String>>(
+  MyRepostsNotifier.new,
+);
+
+/// An account's reposts for its profile tab: real ones are loaded into the
+/// cache, sample ones come from the sample feed (see [postProvider]).
+final userRepostIdsProvider = FutureProvider.autoDispose
+    .family<List<String>, String>((ref, userId) async {
+      final repo = ref.watch(repositoryProvider);
+      final ids = await repo.repostIds(userId);
+      final posts = await repo.postsByIds(ids);
+      ref.read(postCacheProvider.notifier).upsertAll(posts);
+      return ids;
+    });
 
 final savedPostIdsProvider = FutureProvider.autoDispose<List<String>>(
   (ref) => _cacheIds(ref, ref.watch(repositoryProvider).savedPosts()),
@@ -375,6 +455,10 @@ class PostActions {
     XFile? video,
     Audience audience = Audience.public,
     Music? music,
+    MusicSticker? musicSticker,
+    List<PostText> texts = const [],
+    PostEdits? edits,
+    XFile? videoOverlay,
     Poll? poll,
     String? prompt,
     List<PostTag> tags = const [],
@@ -391,6 +475,10 @@ class PostActions {
       video: video,
       audience: audience,
       music: music,
+      musicSticker: musicSticker,
+      texts: texts,
+      edits: edits,
+      videoOverlay: videoOverlay,
       poll: poll,
       prompt: prompt,
       tags: tags,
