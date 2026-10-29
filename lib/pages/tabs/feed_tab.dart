@@ -19,6 +19,9 @@ class FeedTab extends ConsumerWidget {
     ref.invalidate(followingProvider);
     ref.invalidate(myProfileProvider);
     ref.invalidate(notesProvider);
+    ref.invalidate(seedModeProvider);
+    ref.invalidate(suggestedPostIdsProvider);
+    ref.invalidate(suggestedStoriesProvider);
     await Future.wait([
       ref.read(homeFeedProvider.notifier).refresh(),
       ref.read(storiesProvider.notifier).refresh(),

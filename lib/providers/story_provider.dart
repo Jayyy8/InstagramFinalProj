@@ -5,6 +5,7 @@ import "../data/sample_feed.dart";
 import "../models/audience.dart";
 import "../models/feed_models.dart";
 import "../models/social_models.dart";
+import "feed_provider.dart";
 import "social_providers.dart";
 
 /// Story ids you have opened. Real ones are also saved to Supabase.
@@ -154,6 +155,22 @@ bool groupSeen(StoryGroup group, Set<String> seen) =>
 
 /// What the stories row shows after "Your story": people you follow with
 /// unseen stories, then seen ones, then the sample channels.
+/// Stories of accounts you don't follow (the seed pages and people).
+final suggestedStoriesProvider = FutureProvider<List<StoryGroup>>((ref) async {
+  final me = ref.watch(currentUserIdProvider);
+  if (me == null) return const [];
+  if (!await ref.watch(seedModeProvider.future)) return const [];
+  final following = await ref.watch(followingProvider.future);
+  final repo = ref.read(repositoryProvider);
+  final groups = await repo.suggestedStoryGroups({me, ...following});
+  final viewed = await repo.viewedStoryIds([
+    for (final g in groups)
+      for (final s in g.slides) s.id,
+  ]);
+  ref.read(seenStoriesProvider.notifier).addAll(viewed);
+  return groups;
+});
+
 final storyRowProvider = Provider<List<StoryGroup>>((ref) {
   final seen = ref.watch(seenStoriesProvider);
   final real = (ref.watch(storiesProvider).valueOrNull ?? const [])
@@ -161,6 +178,16 @@ final storyRowProvider = Provider<List<StoryGroup>>((ref) {
       .toList();
   final unseen = real.where((g) => !groupSeen(g, seen)).toList();
   final watched = real.where((g) => groupSeen(g, seen)).toList();
+  if (ref.watch(seedModeProvider).valueOrNull ?? false) {
+    // Seed accounts after the people you follow, unseen first.
+    final more = ref.watch(suggestedStoriesProvider).valueOrNull ?? const [];
+    return [
+      ...unseen,
+      ...watched,
+      ...more.where((g) => !groupSeen(g, seen)),
+      ...more.where((g) => groupSeen(g, seen)),
+    ];
+  }
   final samples = sampleStoryGroups();
   final sampleUnseen = samples.where((g) => !groupSeen(g, seen));
   final sampleSeen = samples.where((g) => groupSeen(g, seen));

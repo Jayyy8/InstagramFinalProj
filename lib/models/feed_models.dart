@@ -233,7 +233,7 @@ class FeedPost {
 
   bool get remote => author != null;
   String get authorName => author?.username ?? channel?.handle ?? "you";
-  bool get verified => channel?.verified ?? false;
+  bool get verified => channel?.verified ?? author?.verified ?? false;
   List<String>? get authorAvatar => author?.avatarUrls;
   int get likes => baseLikes + (liked ? 1 : 0);
   int get totalComments => remote ? commentCount : comments.length;

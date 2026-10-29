@@ -281,7 +281,7 @@ class _PostCardState extends ConsumerState<PostCard> {
                             ],
                           ),
                         )
-                      else if (!mine && !following && !post.remote)
+                      else if (!mine && !following)
                         Text("Suggested for you", style: secondary)
                       else if (post.location.isNotEmpty)
                         Text(

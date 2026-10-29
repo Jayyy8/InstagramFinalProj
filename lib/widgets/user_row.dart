@@ -50,15 +50,30 @@ class UserRow extends ConsumerWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    profile.username,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                      color: colors.text,
-                    ),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          profile.username,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                            color: colors.text,
+                          ),
+                        ),
+                      ),
+                      if (profile.verified) ...[
+                        const SizedBox(width: 4),
+                        const Icon(
+                          CupertinoIcons.checkmark_seal_fill,
+                          size: 13,
+                          color: kIgBlue,
+                          semanticLabel: "Verified",
+                        ),
+                      ],
+                    ],
                   ),
                   if (profile.fullName.isNotEmpty)
                     Text(

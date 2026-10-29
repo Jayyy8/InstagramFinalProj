@@ -240,15 +240,30 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        profile.displayName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: colors.text,
-                        ),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              profile.displayName,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: colors.text,
+                              ),
+                            ),
+                          ),
+                          if (profile.verified) ...[
+                            const SizedBox(width: 4),
+                            const Icon(
+                              CupertinoIcons.checkmark_seal_fill,
+                              size: 15,
+                              color: kIgBlue,
+                              semanticLabel: "Verified",
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 6),
                       Row(
@@ -289,8 +304,16 @@ class _ProfileViewState extends ConsumerState<ProfileView> {
               ),
             ],
           ),
-          if (profile.bio.isNotEmpty) ...[
+          // A page's category, in grey above the bio, like Instagram.
+          if (profile.category != null) ...[
             const SizedBox(height: 8),
+            Text(
+              profile.category!,
+              style: TextStyle(fontSize: 14, color: colors.secondaryText),
+            ),
+          ],
+          if (profile.bio.isNotEmpty) ...[
+            SizedBox(height: profile.category != null ? 2 : 8),
             Text(
               profile.bio,
               style: TextStyle(fontSize: 14, color: colors.text),

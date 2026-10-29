@@ -61,8 +61,18 @@ imports in `lib/`), so it adapts to the phone it runs on:
    for messages. It is safe to run again: **run it again after every update**
    that changes it (the latest, Update 6, adds reposts and saves texts and
    video edits on posts).
-2. **Group members:** replace the placeholders in `lib/data/developers.dart`.
-3. `flutter pub get`
+2. **Sample accounts (optional):** run [`supabase/seed.sql`](supabase/seed.sql)
+   the same way, after `schema.sql`. It adds 34 fictional accounts: news
+   channels, sports channels, pages (memes, food, travel, pets, cars),
+   subscription platforms (movies, music, games, books) and people, with
+   posts, reels, stories, notes, follows, likes and comments. They replace
+   the built-in sample channels everywhere (feed, stories, Reels, Explore,
+   notes). Run it again any time to bring their stories back (they last a
+   week). The accounts can't be logged in to; `supabase/seed_remove.sql`
+   deletes them all. To change them, edit `tool/seed/generate_seed.py` and
+   run `python tool/seed/generate_seed.py`.
+3. **Group members:** replace the placeholders in `lib/data/developers.dart`.
+4. `flutter pub get`
 
 ## Run on a phone
 

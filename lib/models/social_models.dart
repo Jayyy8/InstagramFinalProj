@@ -21,6 +21,14 @@ class Profile {
   /// When you last opened Notifications (newer activity shows a badge).
   final DateTime? activitySeenAt;
 
+  /// Blue check, and the page's category ("News & media website"), from
+  /// supabase/seed.sql (pages are verified there).
+  final bool verified;
+  final String? category;
+
+  /// Made by supabase/seed.sql (sample pages and people).
+  final bool isSeed;
+
   const Profile({
     required this.id,
     required this.username,
@@ -30,6 +38,9 @@ class Profile {
     this.isPrivate = false,
     this.lastActiveAt,
     this.activitySeenAt,
+    this.verified = false,
+    this.category,
+    this.isSeed = false,
   });
 
   factory Profile.fromMap(Map<String, dynamic> map) => Profile(
@@ -41,6 +52,11 @@ class Profile {
     isPrivate: (map["is_private"] ?? false) as bool,
     lastActiveAt: _dateOrNull(map["last_active_at"]),
     activitySeenAt: _dateOrNull(map["activity_seen_at"]),
+    verified: map["is_verified"] == true,
+    category: (map["category"] as String?)?.trim().isEmpty ?? true
+        ? null
+        : map["category"] as String,
+    isSeed: map["is_seed"] == true,
   );
 
   /// Name shown under the avatar: full name, or the username.
@@ -64,6 +80,9 @@ class Profile {
       isPrivate: isPrivate ?? this.isPrivate,
       lastActiveAt: lastActiveAt,
       activitySeenAt: activitySeenAt,
+      verified: verified,
+      category: category,
+      isSeed: isSeed,
     );
   }
 }

@@ -219,7 +219,10 @@ class _ExploreState extends ConsumerState<_Explore> {
     final colors = AppColors.of(context);
     final ids = ref.watch(explorePostIdsProvider).valueOrNull ?? const [];
     final remote = postsFor(ref, ids);
-    final samples = ref.watch(samplePostsProvider);
+    // Seed accounts' posts are real: no built-in samples then.
+    final samples = (ref.watch(seedModeProvider).valueOrNull ?? false)
+        ? const <FeedPost>[]
+        : ref.watch(samplePostsProvider);
     final all = <FeedPost>[...remote, ...samples];
     final topics = FeedCategory.values;
     final List<FeedPost> posts = switch (_chip) {

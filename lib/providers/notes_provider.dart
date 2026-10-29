@@ -43,6 +43,15 @@ class NotesNotifier extends AsyncNotifier<NotesState> {
         others.add(n);
       }
     }
+    // With seed accounts, their people's notes fill the row instead of
+    // the built-in samples.
+    final repo = ref.read(repositoryProvider);
+    if (await repo.hasSeedAccounts()) {
+      final more = await repo
+          .seedNotes({me, ...following})
+          .catchError((_) => <Note>[]);
+      return NotesState(mine: mine, others: [...others, ...more]);
+    }
     return NotesState(mine: mine, others: [...others, ..._sampleNotes()]);
   }
 

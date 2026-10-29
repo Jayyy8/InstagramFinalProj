@@ -154,16 +154,45 @@ final homeFeedProvider = AsyncNotifierProvider<HomeFeedNotifier, List<String>>(
   HomeFeedNotifier.new,
 );
 
-/// The full feed: real posts first, then the sample channels.
+/// supabase/seed.sql was run: its pages and people are real accounts, so
+/// they take the place of the built-in sample channels everywhere.
+final seedModeProvider = FutureProvider<bool>((ref) async {
+  if (ref.watch(currentUserIdProvider) == null) return false;
+  return ref.watch(repositoryProvider).hasSeedAccounts();
+});
+
+/// Posts from accounts you don't follow, shown after your feed.
+final suggestedPostIdsProvider = FutureProvider<List<String>>((ref) async {
+  final me = ref.watch(currentUserIdProvider);
+  if (me == null) return const [];
+  final following = await ref.watch(followingProvider.future);
+  return _cacheIds(
+    ref,
+    ref.watch(repositoryProvider).suggestedPosts({me, ...following}),
+  );
+});
+
+/// The full feed: you and the people you follow first, then suggested
+/// posts (the seed accounts), or the built-in samples without a seed.
 final feedProvider = Provider<List<FeedPost>>((ref) {
   final ids = ref.watch(homeFeedProvider).valueOrNull ?? const [];
   final cache = ref.watch(postCacheProvider);
-  final samples = ref.watch(samplePostsProvider);
-  return [
+  final mine = [
     for (final id in ids)
       if (cache[id] != null) cache[id]!,
-    ...samples.where((p) => p.showInFeed),
   ];
+  if (ref.watch(seedModeProvider).valueOrNull ?? false) {
+    final have = {for (final p in mine) p.id};
+    final suggested =
+        ref.watch(suggestedPostIdsProvider).valueOrNull ?? const [];
+    return [
+      ...mine,
+      for (final id in suggested)
+        if (cache[id] != null && !have.contains(id)) cache[id]!,
+    ];
+  }
+  final samples = ref.watch(samplePostsProvider);
+  return [...mine, ...samples.where((p) => p.showInFeed)];
 });
 
 /// Reels header: "Reels" (for you) or "Friends".
@@ -220,6 +249,10 @@ final reelsProvider = Provider<List<FeedPost>>((ref) {
       if (cache[id] != null && cache[id]!.isVideo && !seen.contains(id))
         cache[id]!,
   ];
+  // With seed accounts their reels are real; the built-in ones step aside.
+  if (ref.watch(seedModeProvider).valueOrNull ?? false) {
+    return [...friends, ...others];
+  }
   final samples = ref
       .watch(samplePostsProvider)
       .where(

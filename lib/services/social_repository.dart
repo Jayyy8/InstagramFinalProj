@@ -401,14 +401,57 @@ class SocialRepository {
     return _toPosts(rows);
   }
 
-  /// Newest posts from everyone (search / explore grid).
+  /// Newest posts from everyone (search / explore grid, Reels).
   Future<List<FeedPost>> explorePosts() async {
     final rows = await _db
         .from("posts")
         .select(_postColumns)
         .order("created_at", ascending: false)
-        .limit(60);
+        .limit(150);
     return _toPosts(rows);
+  }
+
+  /// Posts from accounts you don't follow, for after your feed ("Suggested
+  /// for you").
+  Future<List<FeedPost>> suggestedPosts(Set<String> exclude) async {
+    var query = _db.from("posts").select(_postColumns);
+    if (exclude.isNotEmpty) {
+      query = query.not("user_id", "in", "(${exclude.join(",")})");
+    }
+    final rows = await query.order("created_at", ascending: false).limit(80);
+    return _toPosts([
+      for (final r in rows)
+        if (r["profile_only"] != true) r,
+    ]);
+  }
+
+  /// supabase/seed.sql was run (its accounts replace the built-in samples).
+  Future<bool> hasSeedAccounts() async {
+    try {
+      final rows = await _db
+          .from("profiles")
+          .select("id")
+          .eq("is_seed", true)
+          .limit(1);
+      return rows.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Notes of seed people you don't follow (they fill the notes row like the
+  /// old samples did).
+  Future<List<Note>> seedNotes(Set<String> exclude) async {
+    final rows = await _db
+        .from("profiles")
+        .select("id")
+        .eq("is_seed", true)
+        .limit(60);
+    final ids = [
+      for (final r in rows)
+        if (!exclude.contains(r["id"])) r["id"] as String,
+    ];
+    return notes(ids);
   }
 
   Future<List<FeedPost>> savedPosts() async {
@@ -732,6 +775,30 @@ class SocialRepository {
         .inFilter("user_id", userIds)
         .gt("expires_at", _now)
         .order("created_at");
+    return _groupStories(rows, userIds);
+  }
+
+  /// Stories of accounts you don't follow (the seed pages and people),
+  /// newest accounts first, for after your own in the stories row.
+  Future<List<StoryGroup>> suggestedStoryGroups(Set<String> exclude) async {
+    var query = _db.from("stories").select().gt("expires_at", _now);
+    if (exclude.isNotEmpty) {
+      query = query.not("user_id", "in", "(${exclude.join(",")})");
+    }
+    final rows = await query.order("created_at", ascending: false).limit(200);
+    final order = <String>[];
+    for (final r in rows) {
+      final id = r["user_id"] as String;
+      if (!order.contains(id)) order.add(id);
+    }
+    // Slides play oldest first inside each account.
+    return _groupStories(rows.reversed.toList(), order);
+  }
+
+  Future<List<StoryGroup>> _groupStories(
+    List<Map<String, dynamic>> rows,
+    List<String> userIds,
+  ) async {
     final authors = await _profiles([
       for (final r in rows) r["user_id"] as String,
     ]);
@@ -750,6 +817,7 @@ class SocialRepository {
               key: id,
               username: author.username,
               avatarUrls: author.avatarUrls,
+              verified: author.verified,
               profile: author,
               isMine: id == myId,
               slides: [for (final r in byUser[id]!) StorySlide.fromMap(r)],
