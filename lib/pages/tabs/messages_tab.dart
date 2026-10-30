@@ -507,6 +507,12 @@ class _InboxSuggestionsState extends ConsumerState<_InboxSuggestions> {
   }
 }
 
+// Notes row sizes: the avatar, how far a bubble's tail reaches over the
+// avatar's top, and room for a three-line bubble above it.
+const double _noteAvatar = 72;
+const double _noteOverlap = 14;
+const double _noteArea = 124;
+
 class _NotesRow extends ConsumerWidget {
   const _NotesRow();
 
@@ -530,25 +536,45 @@ class _NotesRow extends ConsumerWidget {
         onTap: onTap,
         behavior: HitTestBehavior.opaque,
         child: SizedBox(
-          width: 92,
+          width: 90,
           child: Column(
             children: [
+              // Like Instagram: the bubble sits on the avatar's top edge,
+              // centered over it, and grows upward with longer notes.
               SizedBox(
-                height: 64,
-                child: Align(
-                  alignment: Alignment.bottomCenter,
-                  child: NoteBubble(text: bubble, placeholder: placeholder),
+                height: _noteArea,
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Center(
+                        child: GradientAvatar(
+                          name: label,
+                          imageUrls: avatar,
+                          size: _noteAvatar,
+                          ring: false,
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      bottom: _noteAvatar - _noteOverlap,
+                      child: Center(
+                        child: NoteBubble(
+                          text: bubble,
+                          placeholder: placeholder,
+                          maxWidth: 84,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              Transform.translate(
-                offset: const Offset(0, -6),
-                child: GradientAvatar(
-                  name: label,
-                  imageUrls: avatar,
-                  size: 76,
-                  ring: false,
-                ),
-              ),
+              const SizedBox(height: 4),
               Text(
                 label,
                 maxLines: 1,
@@ -568,7 +594,7 @@ class _NotesRow extends ConsumerWidget {
     }
 
     return SizedBox(
-      height: 172,
+      height: 166,
       child: ListView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 8),

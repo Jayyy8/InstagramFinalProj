@@ -766,3 +766,14 @@ alter table public.profiles add column if not exists birthday   date;
 alter table public.profiles add column if not exists gender     text;
 alter table public.profiles add column if not exists setup_done boolean not null default true;
 alter table public.profiles alter column setup_done set default false;
+
+-- ════════════════════ Update 8: Photo messages without text ═══════════════
+-- Older inbox tables required text in every message (messages_body_check),
+-- so a photo sent on its own was refused. A message now needs text, a photo
+-- or a shared item. NOT VALID: rows already there aren't re-checked.
+alter table public.messages drop constraint if exists messages_body_check;
+alter table public.messages drop constraint if exists not_empty;
+alter table public.messages drop constraint if exists messages_has_content;
+alter table public.messages add constraint messages_has_content
+  check (length(body) > 0 or media_url is not null or context_type is not null)
+  not valid;

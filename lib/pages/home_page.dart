@@ -9,6 +9,7 @@ import "../providers/social_providers.dart";
 import "../theme/app_theme.dart";
 import "../widgets/android_bars.dart";
 import "../widgets/sub_page.dart";
+import "../widgets/tab_bar_scroll_filter.dart";
 import "activity_page.dart";
 import "create/create_page.dart";
 import "discover_people_page.dart";
@@ -148,10 +149,26 @@ class _HomePageState extends ConsumerState<HomePage>
       List<AdaptiveAppBarAction> actions = const [],
       bool center = true,
     }) {
+      // iOS 26's native bar keeps its last plain title when the next tab
+      // brings a title widget instead ("Search" stayed over the Instagram
+      // logo), so there every tab's title is a widget.
+      final widgetOnly = PlatformInfo.isIOS26OrHigher();
       return AdaptiveAppBar(
         leading: leading,
-        title: title,
-        titleWidget: titleWidget,
+        title: widgetOnly ? null : title,
+        titleWidget:
+            titleWidget ??
+            (widgetOnly && title != null
+                ? Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.of(context).text,
+                      decoration: TextDecoration.none,
+                    ),
+                  )
+                : null),
         actions: actions,
         appBar: IgTopBar.from(
           context,
@@ -316,15 +333,18 @@ class _HomePageState extends ConsumerState<HomePage>
         ],
       ),
       body: PageColors(
-        child: IndexedStack(
-          index: _index,
-          children: [
-            const FeedTab(),
-            ReelsTab(active: _index == 1),
-            const MessagesTab(),
-            const SearchTab(),
-            const ProfileTab(),
-          ],
+        child: TabBarScrollFilter(
+          tab: _index,
+          child: IndexedStack(
+            index: _index,
+            children: [
+              const FeedTab(),
+              ReelsTab(active: _index == 1),
+              const MessagesTab(),
+              const SearchTab(),
+              const ProfileTab(),
+            ],
+          ),
         ),
       ),
     );

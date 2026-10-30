@@ -500,6 +500,10 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
       );
     }
 
+    // The reel runs under the tab bar; on iOS 26 that bar floats over the
+    // reel, so the name, caption and buttons sit above it.
+    final barLift = bottomBarInset(context) - 12;
+
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: _tapMute,
@@ -588,7 +592,7 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
           // ───── Right column: like, comment, repost, share, save, menu ─────
           Positioned(
             right: 8,
-            bottom: 34,
+            bottom: 34 + barLift,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -640,7 +644,7 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
           Positioned(
             left: 14,
             right: 72,
-            bottom: 20,
+            bottom: 20 + barLift,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -762,7 +766,7 @@ class _ReelPageState extends ConsumerState<_ReelPage> {
             Positioned(
               left: 14,
               right: 14,
-              bottom: 8,
+              bottom: 8 + barLift,
               child: IgnorePointer(
                 child: ValueListenableBuilder<VideoPlayerValue>(
                   valueListenable: _video!,

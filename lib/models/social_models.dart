@@ -615,7 +615,7 @@ class Message {
     id: map["id"] as String,
     senderId: map["sender_id"] as String,
     receiverId: map["receiver_id"] as String,
-    body: (map["body"] ?? "") as String,
+    body: _visibleBody(map),
     mediaUrl: map["media_url"] as String?,
     contextType: map["context_type"] as String?,
     contextText: map["context_text"] as String?,
@@ -628,6 +628,16 @@ class Message {
       for (final id in (map["deleted_for"] as List?) ?? const []) id as String,
     ],
   );
+
+  /// Body saved with a photo (or a shared post) on databases that don't
+  /// allow an empty one yet. Never shown.
+  static const contentOnlyBody = "\u{1F4F7}";
+
+  static String _visibleBody(Map<String, dynamic> map) {
+    final body = (map["body"] ?? "") as String;
+    final hasContent = map["media_url"] != null || map["context_type"] != null;
+    return hasContent && body == contentOnlyBody ? "" : body;
+  }
 
   /// Short text used when quoting this message in a reply.
   String get snippet {

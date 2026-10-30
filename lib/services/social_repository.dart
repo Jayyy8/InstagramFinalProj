@@ -1275,12 +1275,12 @@ class SocialRepository {
     String? replyToId,
   }) async {
     final mediaUrl = photo == null ? null : await upload("chat", photo);
-    final row = await _db
+    Future<Map<String, dynamic>> insert(String text) => _db
         .from("messages")
         .insert({
           "sender_id": me,
           "receiver_id": to,
-          "body": body.trim(),
+          "body": text,
           "media_url": ?mediaUrl,
           "context_type": ?contextType,
           "context_text": ?contextText,
@@ -1289,7 +1289,17 @@ class SocialRepository {
         })
         .select()
         .single();
-    return Message.fromMap(row);
+    final text = body.trim();
+    try {
+      return Message.fromMap(await insert(text));
+    } on PostgrestException catch (e) {
+      // Databases set up before photo messages existed still require some
+      // text in every message (check constraint, 23514). Until schema.sql
+      // Update 8 is run, a photo goes out with a marker the app hides.
+      final hasContent = mediaUrl != null || contextType != null;
+      if (e.code != "23514" || text.isNotEmpty || !hasContent) rethrow;
+      return Message.fromMap(await insert(Message.contentOnlyBody));
+    }
   }
 
   Future<void> markRead(String partnerId) async {
