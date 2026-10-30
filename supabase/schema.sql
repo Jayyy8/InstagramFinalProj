@@ -755,3 +755,14 @@ create policy "reposts delete own" on public.reposts
 -- video's filter, edits and crop (a video can't have them drawn into it).
 alter table public.posts add column if not exists overlays jsonb not null default '[]'::jsonb;
 alter table public.posts add column if not exists edits    jsonb;
+
+-- ════════════════════ Update 7: Account setup after sign-up ═══════════════
+-- New accounts fill in their first and last name, birthday, username and
+-- (optionally) a photo, bio and gender before using the app. Accounts that
+-- already exist count as set up.
+alter table public.profiles add column if not exists first_name text not null default '';
+alter table public.profiles add column if not exists last_name  text not null default '';
+alter table public.profiles add column if not exists birthday   date;
+alter table public.profiles add column if not exists gender     text;
+alter table public.profiles add column if not exists setup_done boolean not null default true;
+alter table public.profiles alter column setup_done set default false;

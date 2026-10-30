@@ -46,6 +46,32 @@ class MyProfileNotifier extends AsyncNotifier<Profile?> {
     ref.invalidate(profileProvider(updated.id));
   }
 
+  /// The account setup after sign-up (see AccountSetupPage).
+  Future<void> completeSetup({
+    required String firstName,
+    required String lastName,
+    required String username,
+    required DateTime birthday,
+    String? gender,
+    String bio = "",
+    XFile? photo,
+  }) async {
+    if (photo != null) {
+      final url = await _repo.upload("avatars", photo);
+      await _repo.updateProfile(avatarUrl: url);
+    }
+    final updated = await _repo.completeSetup(
+      firstName: firstName,
+      lastName: lastName,
+      username: username,
+      birthday: birthday,
+      gender: gender,
+      bio: bio,
+    );
+    state = AsyncData(updated);
+    ref.invalidate(profileProvider(updated.id));
+  }
+
   Future<void> setAvatar(XFile photo) async {
     final url = await _repo.upload("avatars", photo);
     final updated = await _repo.updateProfile(avatarUrl: url);

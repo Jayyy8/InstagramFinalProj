@@ -12,6 +12,8 @@ imports in `lib/`), so it adapts to the phone it runs on:
 
 ## Features
 
+- **Account setup:** after sign-up, new accounts enter their name, birthday,
+  username, and optionally a photo, bio and gender, before using the app.
 - **Auth:** register (email code), log in with password / code, forgot
   password, **change password** (Settings → Change password).
 - **Profile:** edit name, username, bio and **profile photo** (uploaded to
@@ -59,8 +61,8 @@ imports in `lib/`), so it adapts to the phone it runs on:
    all of [`supabase/schema.sql`](supabase/schema.sql) and press Run. It
    creates the tables, security rules, storage buckets and turns on realtime
    for messages. It is safe to run again: **run it again after every update**
-   that changes it (the latest, Update 6, adds reposts and saves texts and
-   video edits on posts).
+   that changes it (the latest, Update 7, adds the account setup after
+   sign-up: first and last name, birthday and gender).
 2. **Sample accounts (optional):** run [`supabase/seed.sql`](supabase/seed.sql)
    the same way, after `schema.sql`. It adds 34 fictional accounts: news
    channels, sports channels, pages (memes, food, travel, pets, cars),

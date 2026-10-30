@@ -54,13 +54,54 @@ Future<void> confirmAction(
   );
 }
 
-/// Short banner (top on iOS, snackbar on Android).
+/// Short banner (top on iOS, snackbar on Android). A toast must never turn
+/// a finished action into an error: if the snackbar can't be shown (Android's
+/// snackbar walks every page, and a page that is closing makes it throw), a
+/// plain banner is shown instead.
 void showToast(BuildContext context, String message, {bool error = false}) {
-  AdaptiveSnackBar.show(
-    context,
-    message: message,
-    type: error ? AdaptiveSnackBarType.error : AdaptiveSnackBarType.info,
+  try {
+    AdaptiveSnackBar.show(
+      context,
+      message: message,
+      type: error ? AdaptiveSnackBarType.error : AdaptiveSnackBarType.info,
+    );
+  } catch (_) {
+    _bannerToast(context, message, error: error);
+  }
+}
+
+void _bannerToast(BuildContext context, String message, {bool error = false}) {
+  final overlay = Overlay.maybeOf(context, rootOverlay: true);
+  if (overlay == null) return;
+  late final OverlayEntry entry;
+  entry = OverlayEntry(
+    builder: (context) => Positioned(
+      left: 16,
+      right: 16,
+      bottom: MediaQuery.paddingOf(context).bottom + 72,
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: error ? const Color(0xFFB3261E) : const Color(0xF0262626),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            message,
+            style: const TextStyle(
+              color: Color(0xFFFFFFFF),
+              fontSize: 14,
+              decoration: TextDecoration.none,
+            ),
+          ),
+        ),
+      ),
+    ),
   );
+  overlay.insert(entry);
+  Future.delayed(const Duration(seconds: 3), () {
+    if (entry.mounted) entry.remove();
+  });
 }
 
 /// A readable message for an exception.

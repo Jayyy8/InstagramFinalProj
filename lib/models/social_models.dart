@@ -29,6 +29,16 @@ class Profile {
   /// Made by supabase/seed.sql (sample pages and people).
   final bool isSeed;
 
+  /// From the account setup after sign-up.
+  final String firstName;
+  final String lastName;
+  final DateTime? birthday;
+  final String? gender;
+
+  /// False for a new account that hasn't finished the setup (it is shown
+  /// before the app). Accounts from before the setup existed count as done.
+  final bool setupDone;
+
   const Profile({
     required this.id,
     required this.username,
@@ -41,6 +51,11 @@ class Profile {
     this.verified = false,
     this.category,
     this.isSeed = false,
+    this.firstName = "",
+    this.lastName = "",
+    this.birthday,
+    this.gender,
+    this.setupDone = true,
   });
 
   factory Profile.fromMap(Map<String, dynamic> map) => Profile(
@@ -57,6 +72,12 @@ class Profile {
         ? null
         : map["category"] as String,
     isSeed: map["is_seed"] == true,
+    firstName: (map["first_name"] ?? "") as String,
+    lastName: (map["last_name"] ?? "") as String,
+    birthday: _dateOrNull(map["birthday"]),
+    gender: map["gender"] as String?,
+    // Missing column (Update 7 not run yet): treat as set up.
+    setupDone: map["setup_done"] != false,
   );
 
   /// Name shown under the avatar: full name, or the username.
@@ -83,6 +104,11 @@ class Profile {
       verified: verified,
       category: category,
       isSeed: isSeed,
+      firstName: firstName,
+      lastName: lastName,
+      birthday: birthday,
+      gender: gender,
+      setupDone: setupDone,
     );
   }
 }

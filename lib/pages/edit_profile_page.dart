@@ -95,13 +95,10 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
       await ref
           .read(myProfileProvider.notifier)
           .save(username: username, fullName: _name.text, bio: _bio.text);
-      if (mounted) {
-        showToast(context, "Profile saved");
-        Navigator.of(context).pop();
-      }
     } catch (e) {
       final text = errorText(e);
       if (mounted) {
+        setState(() => _saving = false);
         showInfo(
           context,
           title: "Couldn't save",
@@ -110,9 +107,14 @@ class _EditProfilePageState extends ConsumerState<EditProfilePage> {
               : text,
         );
       }
-    } finally {
-      if (mounted) setState(() => _saving = false);
+      return;
     }
+    // Saved. (Outside the try: a problem showing the toast is not a failed
+    // save.)
+    if (!mounted) return;
+    setState(() => _saving = false);
+    showToast(context, "Profile saved");
+    Navigator.of(context).pop();
   }
 
   @override

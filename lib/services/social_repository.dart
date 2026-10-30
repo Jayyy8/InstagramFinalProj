@@ -102,6 +102,64 @@ class SocialRepository {
     return Profile.fromMap(row);
   }
 
+  /// True when no other account has [username].
+  Future<bool> usernameFree(String username) async {
+    final rows = await _db
+        .from("profiles")
+        .select("id")
+        .eq("username", username.trim().toLowerCase())
+        .neq("id", me)
+        .limit(1);
+    return rows.isEmpty;
+  }
+
+  /// Saves the account setup and marks it done. Without Update 7 of
+  /// schema.sql only the name, username and bio are saved.
+  Future<Profile> completeSetup({
+    required String firstName,
+    required String lastName,
+    required String username,
+    required DateTime birthday,
+    String? gender,
+    String bio = "",
+  }) async {
+    final basic = <String, dynamic>{
+      "username": username.trim().toLowerCase(),
+      "full_name": "${firstName.trim()} ${lastName.trim()}".trim(),
+      "bio": bio.trim(),
+    };
+    final full = {
+      ...basic,
+      "first_name": firstName.trim(),
+      "last_name": lastName.trim(),
+      "birthday":
+          "${birthday.year.toString().padLeft(4, "0")}-"
+          "${birthday.month.toString().padLeft(2, "0")}-"
+          "${birthday.day.toString().padLeft(2, "0")}",
+      "gender": gender,
+      "setup_done": true,
+    };
+    Map<String, dynamic> row;
+    try {
+      row = await _db
+          .from("profiles")
+          .update(full)
+          .eq("id", me)
+          .select()
+          .single();
+    } on PostgrestException catch (e) {
+      // 42703 / PGRST204: the setup columns don't exist yet.
+      if (e.code != "42703" && e.code != "PGRST204") rethrow;
+      row = await _db
+          .from("profiles")
+          .update(basic)
+          .eq("id", me)
+          .select()
+          .single();
+    }
+    return Profile.fromMap(row);
+  }
+
   Future<Profile> updateProfile({
     String? username,
     String? fullName,

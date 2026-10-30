@@ -75,10 +75,7 @@ const List<Developer> kDevelopers = [
   ),
   Developer(
     name: "Keen Clever Latuna",
-    role: "QA tester · Documentation",
-    contributions: [
-      "Testing on Android and iPhone, bug reports",
-      "README, setup guide and project documentation",
-    ],
+    role: "QA tester",
+    contributions: ["Testing on iPhone and Android"],
   ),
 ];
